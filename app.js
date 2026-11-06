@@ -16,7 +16,6 @@ let user = null,
 let currentScreen = null,
   galleryFrame,
   toastTimer;
-let landingAnimations = [];
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 document.addEventListener(
   "keydown",
@@ -48,47 +47,24 @@ function toast(message) {
 }
 function showScreen(id, animate = true) {
   const previous = currentScreen;
-  if (previous !== id) {
-    landingAnimations.forEach((animation) => animation.cancel());
-    landingAnimations = [];
-  }
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
   currentScreen = id;
   if (
     previous !== id &&
+    id !== "landing" &&
     animate &&
     !reducedMotion.matches &&
     !("keyboard" in document.documentElement.dataset)
   ) {
-    if (id === "landing") {
-      // A small stagger gives the heading, supporting copy, and CTA a clear order.
-      // Backwards fill reserves the delayed state without keeping a transform
-      // after completion, so the button's press feedback stays responsive.
-      landingAnimations = [...$(".hero").children].map((element, index) =>
-        element.animate(
-          [
-            { opacity: 0, transform: "translateY(8px)" },
-            { opacity: 1, transform: "translateY(0)" },
-          ],
-          {
-            duration: 280,
-            delay: index * 60,
-            easing: "cubic-bezier(.23,1,.32,1)",
-            fill: "backwards",
-          },
-        ),
-      );
-    } else {
-      const target =
-        id === "auth-screen" ? $(".auth-card") : $(".gallery-content");
-      target?.animate(
-        [
-          { opacity: 0, transform: "translateY(6px)" },
-          { opacity: 1, transform: "translateY(0)" },
-        ],
-        { duration: 240, easing: "cubic-bezier(.23,1,.32,1)" },
-      );
-    }
+    const target =
+      id === "auth-screen" ? $(".auth-card") : $(".gallery-content");
+    target?.animate(
+      [
+        { opacity: 0, transform: "translateY(6px)" },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      { duration: 240, easing: "cubic-bezier(.23,1,.32,1)" },
+    );
   }
   if (id === "workspace") scheduleGalleryLayout();
 }
