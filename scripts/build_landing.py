@@ -26,6 +26,7 @@ def build(destination):
   <title>Pluck — Your design inspiration, collected</title>
   <link rel="icon" href="{favicon}" type="image/svg+xml">
   <link rel="stylesheet" href="landing.css">
+  <script src="landing.js" defer></script>
   <style>
     *, *::before, *::after {{ box-sizing: border-box; }}
     body {{ margin: 0; background: #111; }}
@@ -49,6 +50,7 @@ def build(destination):
         shutil.copyfile(ROOT / asset, destination / asset)
     (destination / "index.html").write_text(html, encoding="utf-8")
     (destination / "landing.css").write_text(css, encoding="utf-8")
+    shutil.copyfile(ROOT / "landing.js", destination / "landing.js")
 
 
 if __name__ == "__main__":

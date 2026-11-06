@@ -6,6 +6,7 @@ on:
     paths:
       - "index.html"
       - "landing.css"
+      - "landing.js"
       - "assets/**"
       - "scripts/build_landing.py"
       - ".github/workflows/landing-pages.yml"

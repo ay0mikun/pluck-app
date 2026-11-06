@@ -75,6 +75,8 @@
 .launch-logo-k { left: 89.18px; top: 6px; }
 
 .launch-button {
+  font-family: inherit;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -127,7 +129,6 @@
 
 .launch-status {
   height: 34px;
-  cursor: default;
   scroll-margin-top: 110px;
 }
 
