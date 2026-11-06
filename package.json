@@ -1,0 +1,11 @@
+{
+  "name": "ui-moodboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local UI moodboards with X imports and responsive masonry",
+  "scripts": {
+    "start": ".venv/bin/python server.py",
+    "check": "node --check app.js && .venv/bin/python -m py_compile server.py auth.py media.py oauth.py",
+    "test": ".venv/bin/python -m unittest discover -s tests -v"
+  }
+}
