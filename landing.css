@@ -147,6 +147,7 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .launch-nav-inner,
   .hero > h1,
   .hero > p,
   .hero > .launch-button {
