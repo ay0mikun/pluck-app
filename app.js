@@ -45,14 +45,13 @@ function toast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (node.hidden = true), 4000);
 }
-function showScreen(id, animate = true) {
+function showScreen(id) {
   const previous = currentScreen;
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
   currentScreen = id;
   if (
     previous !== id &&
     id !== "landing" &&
-    animate &&
     !reducedMotion.matches &&
     !("keyboard" in document.documentElement.dataset)
   ) {
@@ -527,7 +526,7 @@ async function init() {
     }
   } catch {
     toast("Backend unavailable. Start the app with npm start, then refresh.");
-    showScreen("landing", false);
+    showScreen("landing");
   }
 }
 init();
