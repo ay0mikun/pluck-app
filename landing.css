@@ -47,32 +47,12 @@
 }
 
 .launch-logo {
-  position: relative;
-  display: block;
   flex: none;
-  width: 100px;
-  height: 30px;
-  overflow: hidden;
 }
 
-.launch-logo img, .launch-logo-mark {
-  position: absolute;
+.launch-logo img {
   display: block;
 }
-
-.launch-logo-mark {
-  inset: 0 auto auto 0;
-  width: 30px;
-  height: 30px;
-  mask-image: url("assets/pluck-group.svg"), url("assets/pluck-group1.svg");
-  mask-size: 30px 30px;
-}
-
-.launch-logo-p { left: 38px; top: 6px; }
-.launch-logo-l { left: 52.22px; top: 6px; }
-.launch-logo-u { left: 62.64px; top: 10.737px; }
-.launch-logo-c { left: 74.96px; top: 10.737px; }
-.launch-logo-k { left: 89.18px; top: 6px; }
 
 .launch-button {
   font-family: inherit;
