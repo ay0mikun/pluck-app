@@ -155,11 +155,11 @@
   }
 
   .hero > p {
-    animation-delay: 90ms;
+    animation-delay: 180ms;
   }
 
   .hero > .launch-button {
-    animation-delay: 180ms;
+    animation-delay: 360ms;
   }
 }
 
