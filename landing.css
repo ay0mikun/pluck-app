@@ -120,6 +120,33 @@ html {
   height: 34px;
 }
 
+.landing-stage .launch-nav-inner {
+  background: #161616;
+}
+
+.landing-stage .launch-nav .launch-button {
+  height: 34px;
+  gap: 6px;
+  background: #1f1f1f;
+  color: #b1b0ae;
+  font-weight: 400;
+}
+
+.launch-x {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+.landing-stage .launch-button:hover {
+  background: #eaeaea;
+}
+
+.landing-stage .launch-nav .launch-button:hover {
+  background: #262626;
+}
+
 @media (max-width: 700px) {
   .launch-nav {
     height: 94px;
@@ -133,6 +160,10 @@ html {
 
   .hero h1 {
     font-size: 32px;
+  }
+
+  .landing-stage .launch-nav {
+    height: 90px;
   }
 }
 

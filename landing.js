@@ -1,11 +1,5 @@
 const launchReducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
-document.querySelectorAll("[data-get-started]").forEach((button) => {
-  button.addEventListener("click", () => {
-    location.hash = "auth";
-  });
-});
-
 document.querySelectorAll("[data-coming-soon]").forEach((button) => {
   let shake;
 

@@ -1,6 +1,7 @@
 """Single-use email sign-in links."""
 
 import hashlib
+import json
 import os
 import secrets
 import smtplib
@@ -8,6 +9,7 @@ import ssl
 import time
 from email.message import EmailMessage
 from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 from auth import create_user, issue_session
 
@@ -37,18 +39,19 @@ def local_preview_enabled(requester, origin):
 
 def send_link(con, email, requester, origin):
     host = os.environ.get("SMTP_HOST")
-    sender = os.environ.get("SMTP_FROM")
+    sender = os.environ.get("EMAIL_FROM") or os.environ.get("SMTP_FROM")
+    resend_key = os.environ.get("RESEND_API_KEY")
     local_preview = local_preview_enabled(requester, origin)
-    if not local_preview and (not host or not sender):
+    if not local_preview and (not sender or not (host or resend_key)):
         raise ValueError("Email sign-in is unavailable. Continue with X.")
 
     now = time.time()
     con.execute("BEGIN IMMEDIATE")
     con.execute("DELETE FROM email_links WHERE expires <= ?", (now,))
     recent = con.execute(
-        "SELECT count(*) FROM email_links WHERE issued > ? AND (email = ? OR requester = ?)",
+        "SELECT count(*) AS total FROM email_links WHERE issued > ? AND (email = ? OR requester = ?)",
         (now - 60, email, requester),
-    ).fetchone()[0]
+    ).fetchone()["total"]
     if recent >= 3:
         raise ValueError("Too many requests. Try again in a minute.")
     token = secrets.token_urlsafe(32)
@@ -62,6 +65,23 @@ def send_link(con, email, requester, origin):
     link = f"{origin}/#email-token={token}"
     if local_preview:
         return link
+
+    if resend_key:
+        payload = {
+            "from": sender, "to": [email], "subject": "Sign in to Pluck",
+            "text": f"Open this link within 15 minutes to sign in to Pluck:\n\n{link}\n",
+        }
+        request = Request("https://api.resend.com/emails",
+                          data=json.dumps(payload).encode(),
+                          headers={"Authorization": f"Bearer {resend_key}",
+                                   "Content-Type": "application/json"},
+                          method="POST")
+        try:
+            with urlopen(request, timeout=15) as response:
+                response.read()
+            return
+        except OSError:
+            raise ValueError("We couldn’t send the email. Try again or continue with X.") from None
 
     message = EmailMessage()
     message["Subject"] = "Sign in to Pluck"

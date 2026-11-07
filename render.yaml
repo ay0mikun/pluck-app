@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: pluck-staging
+    runtime: python
+    plan: free
+    branch: staging
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PLUCK_STAGING
+        value: "1"
+      - key: LOCAL_EMAIL_PREVIEW
+        value: "0"
+      - key: LOCAL_FILLED_LIBRARY
+        value: "0"
+      - key: SUPABASE_STORAGE_BUCKET
+        value: pluck-media
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: APP_ORIGIN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

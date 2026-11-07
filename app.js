@@ -123,6 +123,10 @@ async function route() {
     try {
       await refresh();
       showScreen("workspace");
+      if (sessionStorage.getItem("pluck-add-first-design")) {
+        sessionStorage.removeItem("pluck-add-first-design");
+        openImportDialog();
+      }
     } catch (e) {
       toast(e.message);
     }
@@ -514,6 +518,12 @@ function openImportDialog() {
 }
 
 $("#paste-link").onclick = $("#empty-add").onclick = openImportDialog;
+document.querySelectorAll("[data-add-design]").forEach((button) => {
+  button.onclick = () => {
+    sessionStorage.setItem("pluck-add-first-design", "1");
+    location.hash = user ? "library" : "auth";
+  };
+});
 importUrl.oninput = () => {
   importStatus.textContent = "";
   setImportState();

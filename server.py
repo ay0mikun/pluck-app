@@ -5,9 +5,7 @@ import io
 import json
 import os
 import re
-import sqlite3
 import uuid
-from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -16,6 +14,8 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from PIL import Image
 
+import database
+import object_store
 import email_login
 import oauth
 from auth import session_user
@@ -29,22 +29,15 @@ AVATARS = DATA / "avatars"
 MAX_IMAGE = 10 * 1024 * 1024
 
 
-@contextmanager
 def db():
-    con = sqlite3.connect(DATA / "moodboard.sqlite3")
-    con.row_factory = sqlite3.Row
-    con.execute("PRAGMA foreign_keys=ON")
-    try:
-        with con:
-            yield con
-    finally:
-        con.close()
+    return database.connect(DATA / "moodboard.sqlite3")
 
 
 def store_image(identifier, raw):
     width, height, full, thumbnail = prepare_image(raw)
-    (UPLOADS / (identifier + ".png")).write_bytes(full)
-    (THUMBNAILS / (identifier + ".webp")).write_bytes(thumbnail)
+    with object_store.batch():
+        object_store.write(DATA, f"/uploads/{identifier}.png", full)
+        object_store.write(DATA, f"/thumbnails/{identifier}.webp", thumbnail)
     return width, height, f"/uploads/{identifier}.png", f"/thumbnails/{identifier}.webp"
 
 
@@ -249,7 +242,9 @@ def fetch_avatar(url):
         with Image.open(io.BytesIO(thumbnail)) as image:
             image.thumbnail((64, 64))
             identifier = uuid.uuid4().hex
-            image.save(AVATARS / (identifier + ".webp"), "WEBP", quality=85)
+            output = io.BytesIO()
+            image.save(output, "WEBP", quality=85)
+            object_store.write(DATA, f"/avatars/{identifier}.webp", output.getvalue())
         return f"/avatars/{identifier}.webp"
     except (OSError, ValueError):
         return ""
@@ -307,6 +302,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/api/health":
+            return self.respond(200, {"ok": True})
         match = re.fullmatch(r"/api/auth/(google|x)/(start|callback)", path)
         if match:
             return self.oauth_login(*match.groups())
@@ -335,7 +332,7 @@ class Handler(BaseHTTPRequestHandler):
                 ]
                 for design in designs:
                     design["boards"] = [
-                        r[0]
+                        r["board_id"]
                         for r in con.execute(
                             "SELECT board_id FROM board_designs WHERE design_id=?",
                             (design["id"],),
@@ -361,7 +358,8 @@ class Handler(BaseHTTPRequestHandler):
             file = THUMBNAILS / path.split("/")[-1]
         if re.fullmatch(r"/avatars/[a-f0-9]{32}\.webp", path):
             file = AVATARS / path.split("/")[-1]
-        if path.startswith(("/uploads/", "/thumbnails/", "/avatars/")):
+        private_media = path.startswith(("/uploads/", "/thumbnails/", "/avatars/"))
+        if private_media:
             with db() as con:
                 user = session_user(self.headers, con)
                 if (
@@ -372,8 +370,12 @@ class Handler(BaseHTTPRequestHandler):
                     ).fetchone()
                 ):
                     return self.respond(404, {"error": "Not found."})
-        if not file or not file.is_file():
+        try:
+            body = object_store.read(DATA, path) if private_media else file.read_bytes()
+        except (FileNotFoundError, AttributeError, IsADirectoryError):
             return self.respond(404, {"error": "Not found."})
+        except OSError:
+            return self.respond(502, {"error": "Image storage is unavailable. Try again."})
         types = {
             ".html": "text/html; charset=utf-8",
             ".css": "text/css",
@@ -386,13 +388,19 @@ class Handler(BaseHTTPRequestHandler):
             ".ttf": "font/ttf",
             ".woff2": "font/woff2",
         }
-        body = file.read_bytes()
         if file == ROOT / "index.html" and os.environ.get("PLUCK_STAGING") == "1":
-            body = body.replace(b"data-coming-soon", b"data-get-started")
-            body = body.replace(b"Coming soon", b"Get started")
+            body = body.replace(b'class="screen landing"', b'class="screen landing landing-stage"')
+            body = body.replace(b"data-coming-soon", b"data-add-design")
+            body = body.replace(b"Coming soon", b"Add my first design")
+            body = body.replace(
+                b'Add my first design\n          </button>',
+                b'<span class="launch-x"><img src="assets/workspace-x.svg" width="11.5" height="11.5" alt="" /></span>Paste X link\n          </button>',
+                1,
+            )
+            body = body.replace(b"to sort into boards.", b"to sort into moodboards.")
         self.send_response(200)
         self.send_header(
-            "Content-Type", types.get(file.suffix, "application/octet-stream")
+            "Content-Type", types.get(Path(path).suffix if private_media else file.suffix, "application/octet-stream")
         )
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -424,7 +432,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(body, dict):
                 raise ValueError("Expected a JSON object.")
             path = urlparse(self.path).path
-            with db() as con:
+            with object_store.batch(), db() as con:
                 if path == "/api/auth/continue" and method == "POST":
                     email = clean(body.get("email"), 254).lower()
                     if email.endswith("@oauth.invalid") or not re.fullmatch(
@@ -508,7 +516,7 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("Enter an HTTPS link to a specific X post.")
                     source = f"https://x.com{parsed.path.rstrip('/')}"
                     existing = [
-                        r[0]
+                        r["id"]
                         for r in con.execute(
                             "SELECT id FROM designs WHERE source=? AND owner_id=?",
                             (source, owner),
@@ -623,6 +631,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def initialize_storage():
+    if os.environ.get("DATABASE_URL"):
+        if not object_store.settings():
+            raise ValueError("Hosted storage requires a private Supabase bucket.")
+        object_store.verify_bucket()
+        with db() as con:
+            database.initialize_postgres(con, oauth.SCHEMA + email_login.SCHEMA)
+        return
+    if object_store.settings():
+        raise ValueError("Set DATABASE_URL to persist hosted accounts and boards.")
     for directory in (DATA, UPLOADS, THUMBNAILS, AVATARS):
         directory.mkdir(parents=True, exist_ok=True)
     with db() as con:
@@ -678,6 +695,8 @@ def load_local_env(path):
         return
     allowed = {
         "PORT", "HOST", "APP_ORIGIN", "PLUCK_STAGING", "X_BEARER_TOKEN",
+        "DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_STORAGE_BUCKET", "RESEND_API_KEY", "EMAIL_FROM",
         "LOCAL_EMAIL_PREVIEW", "LOCAL_FILLED_LIBRARY",
         "SMTP_HOST", "SMTP_PORT", "SMTP_FROM", "SMTP_USERNAME", "SMTP_PASSWORD",
         "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET",

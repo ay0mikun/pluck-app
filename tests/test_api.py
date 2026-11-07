@@ -32,6 +32,9 @@ class API(unittest.TestCase):
             "LOCAL_EMAIL_PREVIEW": "1",
             "LOCAL_FILLED_LIBRARY": "0",
             "APP_ORIGIN": "http://127.0.0.1:5199",
+            "DATABASE_URL": "",
+            "SUPABASE_URL": "",
+            "SUPABASE_SERVICE_ROLE_KEY": "",
         }
         cls.cookie = None
         cls.start()
