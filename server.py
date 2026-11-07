@@ -19,7 +19,7 @@ import database
 import object_store
 import email_login
 import oauth
-from auth import session_user
+from auth import session_user, renew_session
 from media import prepare_image, prepare_preview
 
 ROOT = Path(__file__).resolve().parent
@@ -346,7 +346,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/auth/me":
             with db() as con:
                 user = session_user(self.headers, con)
-            return self.respond(200, {"user": user})
+                cookie = renew_session(self.headers, con) if user else None
+            if cookie and os.environ.get("APP_ORIGIN", "").startswith("https://"):
+                cookie += "; Secure"
+            return self.respond(200, {"user": user}, cookie)
         if path == "/api/state":
             with db() as con:
                 user = session_user(self.headers, con)
