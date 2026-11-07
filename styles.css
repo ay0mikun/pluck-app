@@ -929,6 +929,7 @@ dialog:hover > .close {
   object-fit: contain;
   margin: auto;
   border-radius: 6px;
+  corner-shape: round;
 }
 .detail-info h2 {
   font: 400 20px/1.15 "Geist Serif", Georgia, serif;

@@ -256,8 +256,20 @@ def fetch_avatar(url):
             or not parsed.path.startswith("/profile_images/")
         ):
             return ""
-        with build_opener(NoRedirect).open(url, timeout=8) as response:
-            raw = response.read(2 * 1024 * 1024 + 1)
+        request = Request(url, headers={"User-Agent": "Pluck/0.1", "Accept": "image/*"})
+        for attempt in range(2):
+            try:
+                with build_opener(NoRedirect).open(request, timeout=12) as response:
+                    raw = response.read(2 * 1024 * 1024 + 1)
+                break
+            except (URLError, TimeoutError, ConnectionError) as error:
+                status = getattr(error, "code", None)
+                if isinstance(error, HTTPError):
+                    error.close()
+                if attempt == 0 and (status is None or status in (408, 429, 500, 502, 503, 504)):
+                    continue
+                print(f"X avatar download failed: {status or type(error).__name__}", flush=True)
+                return ""
         if len(raw) > 2 * 1024 * 1024:
             return ""
         _, _, _, thumbnail = prepare_image(raw)
@@ -572,6 +584,23 @@ class Handler(BaseHTTPRequestHandler):
                         )
                     ]
                     if existing:
+                        missing_avatar = con.execute(
+                            "SELECT 1 FROM designs WHERE source=? AND owner_id=? "
+                            "AND (creator_avatar_url IS NULL OR creator_avatar_url='')",
+                            (source, owner),
+                        ).fetchone()
+                        if missing_avatar:
+                            try:
+                                _, _, _, avatar = fetch_post(match[1], token)
+                                avatar_url = fetch_avatar(avatar)
+                            except ImportFailure:
+                                avatar_url = ""
+                            if avatar_url:
+                                con.execute(
+                                    "UPDATE designs SET creator_avatar_url=? WHERE source=? AND owner_id=? "
+                                    "AND (creator_avatar_url IS NULL OR creator_avatar_url='')",
+                                    (avatar_url, source, owner),
+                                )
                         return self.respond(200, {"ids": existing, "existing": True})
                     title, creator, photos, avatar = fetch_post(match[1], token)
                     avatar_url = fetch_avatar(avatar)
