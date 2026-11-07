@@ -37,6 +37,8 @@ Uploads and X imports are decoded and orientation-corrected on the backend. Each
 
 The frontend reserves image space with stored CSS aspect ratios and positions cards in the shortest equal-width column. Columns: 1 below 701px, 3 through 1100px, 4 on desktop, and 5 above 1799px. Images below the first visible group lazy-load, with a grey ratio-matched skeleton. Only thumbnails are used in the grid; full-resolution images load when opening the lightbox. Tall images cap their preview box at approximately 2.5 times the width, remain uncropped, and offer a full-image view.
 
+The preview opens with the cached thumbnail, then swaps to a full-resolution WebP. New imports generate this derivative when saved; existing saves generate it on first preview. Original PNGs remain available for clipboard copying. Derivatives use the same owner checks and private browser cache as other media.
+
 ## X imports
 
 Without a token, public posts are looked up through FxTwitter (`https://api.fxtwitter.com/status/{id}`). Only the numeric post ID is sent to that provider. Attached photos and author profile pictures download from the allowlisted `pbs.twimg.com` host; creator and canonical source link are retained. Profile photos are cached locally, with initials as a fallback. Existing imports are deduplicated per account by canonical source.

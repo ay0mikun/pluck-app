@@ -9,6 +9,7 @@ import ssl
 import time
 from email.message import EmailMessage
 from urllib.parse import urlsplit
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from auth import create_user, issue_session
@@ -74,12 +75,26 @@ def send_link(con, email, requester, origin):
         request = Request("https://api.resend.com/emails",
                           data=json.dumps(payload).encode(),
                           headers={"Authorization": f"Bearer {resend_key}",
+                                   "User-Agent": "Pluck/0.1",
                                    "Content-Type": "application/json"},
                           method="POST")
         try:
             with urlopen(request, timeout=15) as response:
                 response.read()
             return
+        except HTTPError as error:
+            status = error.code
+            try:
+                detail = json.loads(error.read(4096))
+                category = detail.get("name", "provider_error")
+            except (ValueError, AttributeError):
+                category = "provider_error"
+            finally:
+                error.close()
+            if category not in ("validation_error", "restricted_api_key", "invalid_api_key", "rate_limit_exceeded"):
+                category = "provider_error"
+            print(f"Resend delivery failed: HTTP {status}, {category}", flush=True)
+            raise ValueError("We couldn’t send the email. Try again or continue with X.") from None
         except OSError:
             raise ValueError("We couldn’t send the email. Try again or continue with X.") from None
 

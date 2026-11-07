@@ -20,7 +20,7 @@ import object_store
 import email_login
 import oauth
 from auth import session_user
-from media import prepare_image
+from media import prepare_image, prepare_preview
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get("MOODBOARD_DATA_DIR", ROOT / "data"))
@@ -39,6 +39,7 @@ def store_image(identifier, raw):
     with object_store.batch():
         object_store.write(DATA, f"/uploads/{identifier}.png", full)
         object_store.write(DATA, f"/thumbnails/{identifier}.webp", thumbnail)
+        object_store.write(DATA, f"/previews/{identifier}.webp", prepare_preview(full))
     return width, height, f"/uploads/{identifier}.png", f"/thumbnails/{identifier}.webp"
 
 
@@ -380,16 +381,23 @@ class Handler(BaseHTTPRequestHandler):
             file = THUMBNAILS / path.split("/")[-1]
         if re.fullmatch(r"/avatars/[a-f0-9]{32}\.webp", path):
             file = AVATARS / path.split("/")[-1]
-        private_media = path.startswith(("/uploads/", "/thumbnails/", "/avatars/"))
+        preview = re.fullmatch(r"/previews/([a-f0-9]{32})\.webp", path)
+        private_media = path.startswith(("/uploads/", "/thumbnails/", "/avatars/", "/previews/"))
         if private_media:
             with db() as con:
                 user = session_user(self.headers, con)
+                design = None
+                if user and preview:
+                    design = con.execute(
+                        "SELECT url FROM designs WHERE owner_id=? AND id=?",
+                        (user["id"], preview[1]),
+                    ).fetchone()
                 if (
                     not user
-                    or not con.execute(
+                    or not (design if preview else con.execute(
                         "SELECT 1 FROM designs WHERE owner_id=? AND (image=? OR url=? OR thumbnail_url=? OR creator_avatar_url=?)",
                         (user["id"], path, path, path, path),
-                    ).fetchone()
+                    ).fetchone())
                 ):
                     return self.respond(404, {"error": "Not found."})
             etag = '"' + path.rsplit("/", 1)[-1] + '"'
@@ -401,7 +409,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
         try:
-            body = object_store.read(DATA, path) if private_media else file.read_bytes()
+            if preview:
+                try:
+                    body = object_store.read(DATA, path)
+                except FileNotFoundError:
+                    body = prepare_preview(object_store.read(DATA, design["url"]))
+                    object_store.write(DATA, path, body)
+            else:
+                body = object_store.read(DATA, path) if private_media else file.read_bytes()
         except (FileNotFoundError, AttributeError, IsADirectoryError):
             return self.respond(404, {"error": "Not found."})
         except OSError:

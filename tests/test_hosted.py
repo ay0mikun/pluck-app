@@ -82,6 +82,7 @@ class HostedTests(unittest.TestCase):
                 stored = connection.execute("SELECT token_hash FROM email_links").fetchone()
                 self.assertEqual(stored["token_hash"], email_login.digest(token))
                 self.assertEqual(request.full_url, "https://api.resend.com/emails")
+                self.assertEqual(request.get_header("User-agent"), "Pluck/0.1")
                 send.side_effect = OSError("network failure")
                 with self.assertRaisesRegex(ValueError, "couldn’t send"):
                     email_login.send_link(

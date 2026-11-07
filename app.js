@@ -702,7 +702,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
         ${design.source ? `<a class="preview-control preview-icon" href="${escapeHTML(design.source)}" target="_blank" rel="noopener noreferrer" aria-label="Open original X post"><img src="/assets/workspace-x.svg" alt="" /></a>` : ""}
       </div>
       <div class="detail-stage">
-        <img class="detail-image" src="${escapeHTML(design.url)}" width="${design.width}" height="${design.height}" style="--image-ratio: ${design.width / design.height}" alt="${escapeHTML(design.title)}" />
+        <img class="detail-image" src="${escapeHTML(design.thumbnail_url)}" width="${design.width}" height="${design.height}" style="--image-ratio: ${design.width / design.height}" alt="${escapeHTML(design.title)}" decoding="async" fetchpriority="high" />
         <nav class="detail-navigation" aria-label="Browse designs">
           <button id="previous-design" class="preview-control" type="button"${index === 0 ? " disabled" : ""}>${icon("previous")} Previous</button>
           <button id="next-design" class="preview-control" type="button"${index === ids.length - 1 ? " disabled" : ""}>Next ${icon("next")}</button>
@@ -732,6 +732,18 @@ function openDetail(ids, index, focusTarget = "close-preview") {
         </div>
       </aside>
     </div>`;
+
+  const previewImage = $(".detail-image");
+  const sharpPreview = new Image();
+  sharpPreview.decoding = "async";
+  sharpPreview.fetchPriority = "high";
+  sharpPreview.onload = () => {
+    if (previewImage.isConnected) previewImage.src = sharpPreview.src;
+  };
+  sharpPreview.onerror = () => {
+    if (previewImage.isConnected) previewImage.src = design.url;
+  };
+  sharpPreview.src = `/previews/${encodeURIComponent(design.id)}.webp`;
 
   const picker = $(".board-picker");
   const options = $(".board-options");

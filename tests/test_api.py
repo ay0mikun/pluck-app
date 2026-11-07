@@ -153,6 +153,15 @@ class API(unittest.TestCase):
             urlopen(Request(req.full_url, headers={"If-None-Match": etag}))
         self.assertEqual(unauthorized.exception.code, 404)
         unauthorized.exception.close()
+        preview_url = "http://127.0.0.1:5199/previews/" + design["id"] + ".webp"
+        with urlopen(Request(preview_url, headers={"Cookie": self.cookie})) as res:
+            preview = Image.open(io.BytesIO(res.read()))
+            self.assertEqual(preview.size, (item["width"], item["height"]))
+            self.assertEqual(preview.format, "WEBP")
+        with self.assertRaises(HTTPError) as unauthorized_preview:
+            urlopen(preview_url)
+        self.assertEqual(unauthorized_preview.exception.code, 404)
+        unauthorized_preview.exception.close()
         self.call("api/boards/" + board["id"], "PATCH", {"name": "Renamed"})
         self.call("api/boards/" + board["id"], "DELETE", {})
         item = next(

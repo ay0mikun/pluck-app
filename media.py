@@ -8,6 +8,16 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 Image.MAX_IMAGE_PIXELS = 40_000_000
 
 
+def prepare_preview(raw):
+    """Compress the full-resolution preview, keeping the original for copying."""
+    with Image.open(io.BytesIO(raw)) as image:
+        image = ImageOps.exif_transpose(image)
+        image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+        output = io.BytesIO()
+        image.save(output, "WEBP", quality=88, method=4)
+        return output.getvalue()
+
+
 def prepare_image(raw):
     try:
         with warnings.catch_warnings():
