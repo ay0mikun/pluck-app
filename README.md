@@ -12,7 +12,7 @@ python3 -m venv .venv
 npm start
 ```
 
-Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 23 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
+Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 25 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
 
 ## Accounts and existing data
 

@@ -70,6 +70,36 @@ def verify_bucket():
         raise ValueError("The Supabase storage bucket must be private.")
 
 
+def signed_urls(paths):
+    """Sign only media already authorized by the caller; keep the bucket private."""
+    configured = settings()
+    paths = sorted({path.lstrip("/") for path in paths if path})
+    if not configured or not paths:
+        return {}
+    url, key, bucket = configured
+    result = {}
+    try:
+        for offset in range(0, len(paths), 200):
+            selected = paths[offset:offset + 200]
+            request = Request(
+                f"{url}/storage/v1/object/sign/{bucket}",
+                data=json.dumps({"paths": selected, "expiresIn": "3600"}).encode(),
+                headers={"apikey": key, "Authorization": f"Bearer {key}",
+                         "Content-Type": "application/json", "User-Agent": "Pluck/0.1"},
+                method="POST",
+            )
+            with build_opener(NoRedirect).open(request, timeout=8) as response:
+                items = json.loads(response.read(2 * 1024 * 1024))
+            for item in items:
+                path, signed = item.get("path"), item.get("signedURL")
+                if path in selected and not item.get("error") and isinstance(signed, str) and signed.startswith("/object/sign/"):
+                    result["/" + path] = url + "/storage/v1" + signed
+    except (OSError, ValueError, TypeError, AttributeError):
+        # Existing owner-checked media routes remain a fallback.
+        pass
+    return result
+
+
 def write(data_directory, path, raw):
     pending = _pending.get()
     if pending is not None:

@@ -16,6 +16,14 @@ let currentScreen = null,
   galleryFrame,
   toastTimer;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const mediaURL = (path) => state.media_urls?.[path] || path;
+const imageObserver = new IntersectionObserver((entries) => {
+  for (const { target: image, isIntersecting } of entries) {
+    if (!isIntersecting) continue;
+    imageObserver.unobserve(image);
+    image.src = mediaURL(image.dataset.src);
+  }
+}, { rootMargin: "240px" });
 const visitKey = "pluck-visited";
 function hasVisited() {
   try { return localStorage.getItem(visitKey) === "1"; } catch { return false; }
@@ -295,6 +303,7 @@ $("#logout").onclick = async () => {
     user = null;
     state = { boards: [], designs: [] };
     selectedBoard = null;
+    render();
     if ($("#account-menu").matches(":popover-open")) $("#account-menu").hidePopover();
     if ($("#account-drawer").open) $("#account-drawer").close();
     location.hash = "auth";
@@ -320,7 +329,7 @@ function renderAccount() {
   const avatar = user?.avatar_url;
   if (avatar && (avatar.startsWith("/avatars/") || avatar.startsWith("https://"))) {
     const image = document.createElement("img");
-    image.src = avatar;
+    image.src = mediaURL(avatar);
     image.width = image.height = 34;
     image.alt = "";
     image.onerror = () => image.replaceWith(fallback);
@@ -432,21 +441,35 @@ function render() {
   $("#empty-add span").textContent = state.designs.length
     ? "Add a design"
     : "Add my first design";
-  $("#design-grid").innerHTML = designs
+  const grid = $("#design-grid");
+  const contentKey = JSON.stringify(designs.map((d) => [d.id, d.thumbnail_url, d.creator_avatar_url]));
+  if (grid.dataset.contentKey === contentKey) {
+    layoutGallery();
+    return;
+  }
+  imageObserver.disconnect();
+  grid.dataset.contentKey = contentKey;
+  grid.innerHTML = designs
     .map((d, index) => {
       const ratio = d.width / d.height;
       const displayRatio = Math.max(ratio, 0.4);
-      return `<button class="design-card loading" data-design="${d.id}" data-ratio="${displayRatio}" aria-label="Open ${escapeHTML(d.title)}"><span class="image-slot" style="--image-ratio:${displayRatio}"><img src="${d.thumbnail_url}" width="${d.width}" height="${d.height}" alt="${escapeHTML(d.title)}" loading="${index < 5 ? "eager" : "lazy"}" decoding="async" /></span>${d.creator ? `<span class="creator-badge">${d.creator_avatar_url ? `<img class="creator-avatar" src="${escapeHTML(d.creator_avatar_url)}" alt="" width="28" height="28" loading="lazy" />` : `<span class="creator-initial" aria-hidden="true">${escapeHTML(d.creator.replace(/^@/, "")[0]?.toUpperCase() || "")}</span>`}<span class="creator-name">${escapeHTML(d.creator.replace(/^@/, ""))}</span></span>` : ""}${ratio < 0.4 ? '<span class="extreme-label">View full image ↗</span>' : ""}</button>`;
+      return `<button class="design-card loading" aria-busy="true" data-design="${d.id}" data-ratio="${displayRatio}" aria-label="Open ${escapeHTML(d.title)}"><span class="image-slot" style="--image-ratio:${displayRatio}"><img data-src="${escapeHTML(d.thumbnail_url)}" width="${d.width}" height="${d.height}" alt="${escapeHTML(d.title)}" loading="${index === 0 ? "eager" : "lazy"}" fetchpriority="${index === 0 ? "high" : "auto"}" decoding="async" /></span>${d.creator ? `<span class="creator-badge">${d.creator_avatar_url ? `<img class="creator-avatar" data-src="${escapeHTML(d.creator_avatar_url)}" alt="" width="28" height="28" loading="lazy" />` : `<span class="creator-initial" aria-hidden="true">${escapeHTML(d.creator.replace(/^@/, "")[0]?.toUpperCase() || "")}</span>`}<span class="creator-name">${escapeHTML(d.creator.replace(/^@/, ""))}</span></span>` : ""}${ratio < 0.4 ? '<span class="extreme-label">View full image ↗</span>' : ""}</button>`;
     })
     .join("");
   $("#design-grid")
     .querySelectorAll(".image-slot img")
     .forEach((img) => {
       const loaded = () => {
+        img.closest(".design-card").removeAttribute("aria-busy");
         img.closest(".design-card").classList.remove("loading");
         img.closest(".design-card").classList.add("loaded");
       };
       const failed = () => {
+        if (img.src !== new URL(img.dataset.src, location.href).href) {
+          img.src = img.dataset.src;
+          return;
+        }
+        img.closest(".design-card").removeAttribute("aria-busy");
         img.closest(".design-card").classList.remove("loading");
         const error = document.createElement("span");
         error.className = "image-error";
@@ -454,8 +477,8 @@ function render() {
         img.closest(".image-slot").append(error);
       };
       img.addEventListener("load", loaded, { once: true });
-      img.addEventListener("error", failed, { once: true });
-      if (img.complete) {
+      img.addEventListener("error", failed);
+      if (img.getAttribute("src") && img.complete) {
         if (img.naturalWidth) loaded();
         else failed();
       }
@@ -479,6 +502,7 @@ function render() {
       ),
     );
   layoutGallery();
+  grid.querySelectorAll("img[data-src]").forEach((image) => imageObserver.observe(image));
 }
 // Compute positions from stored ratios, not image load events. Each next card
 // occupies the shortest column; image decoding can only change opacity.
@@ -642,12 +666,12 @@ importForm.onsubmit = async (event) => {
 const boardName = $("#board-name");
 const boardForm = $("#board-form");
 const boardSubmit = boardForm.querySelector("[type=submit]");
-const boardNameLimit = 15;
+const boardNameLimit = 10;
 
 function updateBoardName(showRequired = false) {
   const length = Array.from(boardName.value).length;
   const message = length > boardNameLimit
-    ? `Name should not be more than ${boardNameLimit} characters`
+    ? `Name should not be more than ${boardNameLimit} letters`
     : showRequired && !boardName.value.trim() ? "Required" : "";
   $("#board-name-count").textContent = `${length}/${boardNameLimit}`;
   const error = $("#board-name-error");
@@ -734,7 +758,9 @@ function openDetail(ids, index, focusTarget = "close-preview") {
         ${design.source ? `<a class="preview-control preview-icon" href="${escapeHTML(design.source)}" target="_blank" rel="noopener noreferrer" aria-label="Open original X post"><img src="/assets/workspace-x.svg" alt="" /></a>` : ""}
       </div>
       <div class="detail-stage">
-        <img class="detail-image" src="${escapeHTML(design.thumbnail_url)}" width="${design.width}" height="${design.height}" style="--image-ratio: ${design.width / design.height}" alt="${escapeHTML(design.title)}" decoding="async" fetchpriority="high" />
+        <div class="detail-image-slot loading" style="--image-ratio:${design.width / design.height}">
+          <img class="detail-image" src="${escapeHTML(mediaURL(design.thumbnail_url))}" width="${design.width}" height="${design.height}" alt="${escapeHTML(design.title)}" decoding="async" fetchpriority="high" />
+        </div>
         <nav class="detail-navigation" aria-label="Browse designs">
           <button id="previous-design" class="preview-control" type="button"${index === 0 ? " disabled" : ""}>${icon("previous")} Previous</button>
           <button id="next-design" class="preview-control" type="button"${index === ids.length - 1 ? " disabled" : ""}>Next ${icon("next")}</button>
@@ -744,7 +770,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
         <div class="detail-metadata">
           <h2 id="detail-title" title="${escapeHTML(design.title)}">${escapeHTML(design.title)}</h2>
           ${creator ? `<div class="detail-author">${design.creator_avatar_url
-            ? `<img src="${escapeHTML(design.creator_avatar_url)}" width="28" height="28" alt="" />`
+            ? `<img src="${escapeHTML(mediaURL(design.creator_avatar_url))}" width="28" height="28" alt="" />`
             : `<span class="creator-initial" aria-hidden="true">${escapeHTML(creator[0].toUpperCase())}</span>`}
             <span>${escapeHTML(creator)}</span></div>` : ""}
           ${design.notes ? `<p class="detail-notes">${escapeHTML(design.notes)}</p>` : ""}
@@ -766,16 +792,26 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     </div>`;
 
   const previewImage = $(".detail-image");
+  const previewSlot = $(".detail-image-slot");
+  const revealPreview = () => previewSlot.classList.remove("loading");
+  previewImage.addEventListener("load", revealPreview, { once: true });
+  if (previewImage.complete && previewImage.naturalWidth) revealPreview();
   const sharpPreview = new Image();
   sharpPreview.decoding = "async";
   sharpPreview.fetchPriority = "high";
   sharpPreview.onload = () => {
-    if (previewImage.isConnected) previewImage.src = sharpPreview.src;
+    if (previewImage.isConnected) {
+      previewImage.src = sharpPreview.src;
+      revealPreview();
+    }
   };
   sharpPreview.onerror = () => {
-    if (previewImage.isConnected) previewImage.src = design.url;
+    const local = `/previews/${encodeURIComponent(design.id)}.webp`;
+    if (sharpPreview.src !== new URL(local, location.href).href) {
+      sharpPreview.src = local;
+    } else if (previewImage.isConnected) previewImage.src = design.url;
   };
-  sharpPreview.src = `/previews/${encodeURIComponent(design.id)}.webp`;
+  sharpPreview.src = mediaURL(`/previews/${encodeURIComponent(design.id)}.webp`);
 
   const picker = $(".board-picker");
   const options = $(".board-options");
@@ -955,21 +991,14 @@ function openDetail(ids, index, focusTarget = "close-preview") {
   $("#previous-design").onclick = () => navigate(-1, "previous-design");
   $("#next-design").onclick = () => navigate(1, "next-design");
   $("#copy-design").onclick = async () => {
-    const image = dialog.querySelector(".detail-image");
     try {
       if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
         throw new Error("Image clipboard is unavailable.");
       }
-      const png = image.decode().then(() => new Promise((resolve, reject) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        canvas.getContext("2d").drawImage(image, 0, 0);
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error("Could not encode the image."));
-        }, "image/png");
-      }));
+      const png = fetch(design.url).then((response) => {
+        if (!response.ok) throw new Error("Could not download the original image.");
+        return response.blob();
+      });
       await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
       toast("Image copied.");
     } catch {

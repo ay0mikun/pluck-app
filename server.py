@@ -379,7 +379,12 @@ class Handler(BaseHTTPRequestHandler):
                 for design in designs:
                     design["boards"] = memberships.get(design["id"], [])
             return self.respond(
-                200, {"boards": boards, "designs": designs, "user": user}
+                200, {"boards": boards, "designs": designs, "user": user,
+                      "media_urls": object_store.signed_urls([
+                          path for design in designs
+                          for path in (design["thumbnail_url"], design["creator_avatar_url"],
+                                       f"/previews/{design['id']}.webp")
+                      ] + [user.get("avatar_url") if (user.get("avatar_url") or "").startswith("/avatars/") else ""])}
             )
         files = {
             "/": ROOT / "index.html",
@@ -539,8 +544,8 @@ class Handler(BaseHTTPRequestHandler):
                     name = clean(body.get("name"), 81)
                     if not name:
                         raise ValueError("Name your board.")
-                    if len(name) > 15:
-                        raise ValueError("Name should not be more than 15 characters.")
+                    if len(name) > 10:
+                        raise ValueError("Name should not be more than 10 letters.")
                     identifier = uuid.uuid4().hex
                     con.execute(
                         "INSERT INTO boards(id,name,owner_id) VALUES(?,?,?)",
@@ -561,8 +566,8 @@ class Handler(BaseHTTPRequestHandler):
                         name = clean(body.get("name"), 81)
                         if not name:
                             raise ValueError("Name your board.")
-                        if len(name) > 15:
-                            raise ValueError("Name should not be more than 15 characters.")
+                        if len(name) > 10:
+                            raise ValueError("Name should not be more than 10 letters.")
                         con.execute(
                             "UPDATE boards SET name=? WHERE id=?", (name, match[1])
                         )
