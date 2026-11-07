@@ -23,12 +23,17 @@ PROVIDERS = {
     "x": (
         "https://x.com/i/oauth2/authorize",
         "https://api.x.com/2/oauth2/token",
-        "https://api.x.com/2/users/me",
+        "https://api.x.com/2/users/me?user.fields=profile_image_url,name,username",
         "tweet.read users.read",
     ),
 }
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    display_name TEXT NOT NULL DEFAULT '', username TEXT NOT NULL DEFAULT '',
+    avatar_url TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS oauth_attempts (
     state TEXT PRIMARY KEY, provider TEXT NOT NULL, verifier TEXT NOT NULL,
     callback TEXT NOT NULL, user_id TEXT, expires INTEGER NOT NULL
@@ -125,14 +130,18 @@ def profile(provider, handler, attempt, code):
     if provider == "google":
         subject = details["sub"]
         email = details.get("email", "").lower() if details.get("email_verified") is True else ""
+        account = {"display_name": details.get("name", ""), "username": "", "avatar_url": details.get("picture", "")}
     else:
         subject, email = details["data"]["id"], ""
+        account = {"display_name": details["data"].get("name", ""),
+                   "username": details["data"].get("username", ""),
+                   "avatar_url": details["data"].get("profile_image_url", "")}
     if not isinstance(subject, str) or not subject:
         raise ValueError("The provider did not return an account identifier.")
-    return subject, email
+    return subject, email, account
 
 
-def sign_in(con, provider, subject, email, link_user):
+def sign_in(con, provider, subject, email, link_user, account=None):
     identity = con.execute(
         "SELECT user_id FROM oauth_identities WHERE provider=? AND subject=?", (provider, subject)
     ).fetchone()
@@ -149,4 +158,11 @@ def sign_in(con, provider, subject, email, link_user):
             placeholder = hashlib.sha256(f"{provider}:{subject}".encode()).hexdigest()
             identifier = create_user(con, email or f"{placeholder}@oauth.invalid")
         con.execute("INSERT INTO oauth_identities VALUES(?,?,?)", (provider, subject, identifier))
+    if account:
+        con.execute(
+            "INSERT INTO user_profiles(user_id,display_name,username,avatar_url) VALUES(?,?,?,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET display_name=excluded.display_name,"
+            "username=excluded.username,avatar_url=excluded.avatar_url",
+            (identifier, account["display_name"], account["username"], account["avatar_url"]),
+        )
     return issue_session(con, identifier)

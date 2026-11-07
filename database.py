@@ -20,7 +20,7 @@ class Postgres:
     def query(query):
         # Qualify tables because transaction poolers can switch database sessions.
         return re.sub(
-            r"\b(users|boards|designs|board_designs|sessions|oauth_attempts|oauth_identities|email_links)\b",
+            r"\b(users|user_profiles|boards|designs|board_designs|sessions|oauth_attempts|oauth_identities|email_links)\b",
             r"pluck.\1",
             query.replace("?", "%s"),
         )

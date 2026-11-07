@@ -148,6 +148,8 @@ async function route() {
 window.addEventListener("hashchange", route);
 async function refresh() {
   state = await api("state");
+  user = state.user;
+  renderAccount();
   if (!state.boards.some((board) => board.id === selectedBoard)) selectedBoard = null;
   render();
 }
@@ -306,6 +308,25 @@ $("#account-menu").addEventListener("toggle", (e) =>
 const accountMenu = $("#account-menu");
 const accountDrawer = $("#account-drawer");
 const accountButton = $("#account-button");
+function renderAccount() {
+  const name = user?.display_name || user?.username ||
+    (user?.email?.endsWith("@oauth.invalid") ? "Pluck account" : user?.email) || "Pluck account";
+  accountButton.title = name;
+  accountButton.replaceChildren();
+  const fallback = document.createElement("span");
+  fallback.className = "account-initial";
+  fallback.setAttribute("aria-hidden", "true");
+  fallback.textContent = Array.from(name)[0].toUpperCase();
+  const avatar = user?.avatar_url;
+  if (avatar && (avatar.startsWith("/avatars/") || avatar.startsWith("https://"))) {
+    const image = document.createElement("img");
+    image.src = avatar;
+    image.width = image.height = 34;
+    image.alt = "";
+    image.onerror = () => image.replaceWith(fallback);
+    accountButton.append(image);
+  } else accountButton.append(fallback);
+}
 const mobileAccount = matchMedia("(max-width: 700px)");
 let accountContents;
 

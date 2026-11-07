@@ -12,7 +12,7 @@ python3 -m venv .venv
 npm start
 ```
 
-Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 20 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
+Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 22 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
 
 ## Accounts and existing data
 
@@ -51,7 +51,7 @@ Follows Emil Kowalski's `emil-design-eng` guidance from https://github.com/emilk
 
 ## Before public deployment
 
-The Python HTTP server is intended for development and limited staging tests. Render terminates HTTPS; configure the shared staging credentials below. A public launch needs a production server, broader API rate limiting, backups, and retention/removal policies. Deleting a design currently removes its record but retains its image files on disk. The reference avatar is a local placeholder, not a fetched account identity.
+The Python HTTP server is intended for development and limited staging tests. Render terminates HTTPS; configure the shared staging credentials below. A public launch needs a production server, broader API rate limiting, backups, and retention/removal policies. Deleting a design currently removes its record but retains its image files on disk. Account avatars come from social sign-in; email-only accounts show an initial. Existing social accounts refresh their profile on the next sign-in.
 
 ## Project layout
 

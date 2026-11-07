@@ -435,6 +435,17 @@ textarea {
   border-radius: inherit;
   object-fit: cover;
 }
+.account-initial {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: #282828;
+  color: #fefefe;
+  font-size: 15px;
+  font-weight: 500;
+}
 
 .filters {
   position: sticky;

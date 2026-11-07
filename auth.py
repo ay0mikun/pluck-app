@@ -17,7 +17,9 @@ def session_user(headers, con):
         return None
     key = hashlib.sha256(value.value.encode()).hexdigest()
     row = con.execute(
-        "SELECT users.id,users.email FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token=? AND sessions.expires>?",
+        "SELECT users.id,users.email,user_profiles.display_name,user_profiles.username,user_profiles.avatar_url "
+        "FROM sessions JOIN users ON users.id=sessions.user_id "
+        "LEFT JOIN user_profiles ON user_profiles.user_id=users.id WHERE sessions.token=? AND sessions.expires>?",
         (key, time.time()),
     ).fetchone()
     return dict(row) if row else None

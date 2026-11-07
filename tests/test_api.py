@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 from PIL import Image
 
 from email_login import digest
+import oauth
 
 
 class API(unittest.TestCase):
@@ -101,6 +102,26 @@ class API(unittest.TestCase):
         except HTTPError as e:
             with e:
                 return e.code, json.load(e)
+
+    def test_provider_profile_persists_and_updates(self):
+        with closing(sqlite3.connect(Path(self.temp.name) / "moodboard.sqlite3")) as con, con:
+            con.row_factory = sqlite3.Row
+            cookie = oauth.sign_in(con, "x", "profile-test", "", None, {
+                "display_name": "Test Designer", "username": "testdesigner", "avatar_url": "/avatars/" + "a" * 32 + ".webp",
+            })
+        req = Request("http://127.0.0.1:5199/api/auth/me", headers={"Cookie": cookie.split(";", 1)[0]})
+        with urlopen(req) as response:
+            user = json.load(response)["user"]
+        self.assertEqual(user["display_name"], "Test Designer")
+        self.assertEqual(user["username"], "testdesigner")
+        self.assertTrue(user["avatar_url"].startswith("/avatars/"))
+        with closing(sqlite3.connect(Path(self.temp.name) / "moodboard.sqlite3")) as con, con:
+            con.row_factory = sqlite3.Row
+            oauth.sign_in(con, "x", "profile-test", "", None, {
+                "display_name": "Updated Designer", "username": "testdesigner", "avatar_url": "",
+            })
+        with urlopen(req) as response:
+            self.assertEqual(json.load(response)["user"]["display_name"], "Updated Designer")
 
     def test_workflow_and_persistence(self):
         _, board = self.call("api/boards", "POST", {"name": "Mobile UI"})
