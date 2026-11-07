@@ -99,3 +99,24 @@ class ImportTests(unittest.TestCase):
             with self.assertRaises(server.ImportFailure) as caught:
                 server.fetch_photo("https://pbs.twimg.com/media/a.png")
         self.assertEqual(caught.exception.status, 422)
+
+    def test_photo_retries_transient_failure(self):
+        opener = Mock()
+        opener.open.side_effect = [
+            HTTPError("https://pbs.twimg.com/media/a.jpg", 503, "Busy", {}, None),
+            io.BytesIO(b"image"),
+        ]
+        with patch("server.build_opener", return_value=opener), patch("server.time.sleep"):
+            self.assertEqual(server.fetch_photo("https://pbs.twimg.com/media/a.jpg"), b"image")
+        self.assertEqual(opener.open.call_count, 2)
+
+    def test_photo_blocked_is_not_retried(self):
+        opener = Mock()
+        opener.open.side_effect = HTTPError(
+            "https://pbs.twimg.com/media/a.jpg", 403, "Forbidden", {}, None,
+        )
+        with patch("server.build_opener", return_value=opener):
+            with self.assertRaises(server.ImportFailure) as caught:
+                server.fetch_photo("https://pbs.twimg.com/media/a.jpg")
+        self.assertIn("blocked", caught.exception.message)
+        self.assertEqual(opener.open.call_count, 1)

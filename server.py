@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -208,13 +209,33 @@ def fetch_photo(url):
         raise ImportFailure(
             502, "The post provider returned an unsupported image address."
         )
-    try:
-        with build_opener(NoRedirect).open(url, timeout=20) as response:
-            raw = response.read(MAX_IMAGE + 1)
-    except (URLError, TimeoutError):
-        raise ImportFailure(
-            502, "An attached image could not be downloaded. Please try again."
-        )
+    request = Request(url, headers={
+        "User-Agent": "Pluck/0.1", "Accept": "image/*",
+    })
+    for attempt in range(3):
+        try:
+            with build_opener(NoRedirect).open(request, timeout=15) as response:
+                raw = response.read(MAX_IMAGE + 1)
+            break
+        except (URLError, TimeoutError, ConnectionError) as error:
+            status = getattr(error, "code", None)
+            if isinstance(error, HTTPError):
+                error.close()
+            # Log only a status/type, never credentials or private request data.
+            print(f"X image download failed: {status or type(error).__name__} (attempt {attempt + 1}/3)", flush=True)
+            transient = status is None or status in (408, 429, 500, 502, 503, 504)
+            if transient and attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            if status in (401, 403):
+                message = "X blocked access to an attached image. Please try again later."
+            elif status == 404:
+                message = "An attached image is no longer available on X."
+            elif status == 429:
+                message = "X is limiting image downloads. Please try again shortly."
+            else:
+                message = "Could not download an attached image after retrying. Please try again shortly."
+            raise ImportFailure(502, message) from None
     if len(raw) > MAX_IMAGE:
         raise ImportFailure(422, "An attached image exceeds the 10 MB limit.")
     return raw
