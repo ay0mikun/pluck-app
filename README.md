@@ -12,13 +12,17 @@ python3 -m venv .venv
 npm start
 ```
 
-Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 12 tests covering accounts, private media access, persistence, provider behavior, and image processing.
+Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 13 tests covering accounts, private media access, persistence, provider behavior, and image processing.
 
 ## Accounts and existing data
 
-A single Get started form signs in existing email/password accounts or creates an account when the email is new. Existing accounts must supply the correct password. Passwords use salted scrypt; server sessions use hashed random tokens and HttpOnly, SameSite cookies. Boards, designs, and media are scoped to the signed-in user. The **first account created claims the existing legacy library**, so no previously saved designs are lost. Later accounts start with an empty library and six default moodboards.
+The login screen supports X and passwordless email. Pluck sends a single-use email link that expires after 15 minutes. After verification, it opens an existing account or creates one for a new address. Existing email accounts keep their library. The first account created claims the legacy library. New accounts start with All. Users create additional moodboards as needed.
 
-Google and X sign-in use separate provider identities. To keep an existing library, sign in with your password and choose **Connect Google** or **Connect X** from the account menu. Accounts are linked only after you prove control of both sign-ins.
+For local testing, set `LOCAL_EMAIL_PREVIEW=1` in `.env` and restart. Submitting an email shows an **Open local sign-in link** action. Accounts persist in `data/moodboard.sqlite3`. This mode skips inbox ownership verification and is intended for loopback development only.
+
+Set `SMTP_HOST`, `SMTP_PORT`, and `SMTP_FROM` in `.env` to enable email sign-in. The mail server must support implicit TLS. Set `SMTP_USERNAME` and `SMTP_PASSWORD` if it requires authentication.
+
+To connect X or Google to an existing library, sign in first and use the account menu. Pluck links accounts after you prove control of both sign-ins.
 
 For local testing, open http://127.0.0.1:5173 and register these exact callback URLs:
 
@@ -45,16 +49,44 @@ Follows Emil Kowalski's `emil-design-eng` guidance from https://github.com/emilk
 
 ## Before public deployment
 
-The server binds to localhost and is a development server. Public deployment still needs HTTPS and a production server, auth/API rate limiting, secure-cookie configuration, email verification/reset delivery, production OAuth credentials, managed storage/database and backups, and retention/removal policies. Deleting a design currently removes its record but retains its image files on disk. The reference avatar is a local placeholder, not a fetched account identity.
+The server binds to localhost and is a development server. Public deployment still needs HTTPS and a production server, auth/API rate limiting, secure-cookie configuration, production email delivery, production OAuth credentials, managed storage/database and backups, and retention/removal policies. Deleting a design currently removes its record but retains its image files on disk. The reference avatar is a local placeholder, not a fetched account identity.
 
 ## Project layout
 
 - `index.html`, `styles.css`, `app.js`: frontend and native browser interactions.
 - `server.py`: HTTP routes and SQLite storage.
-- `auth.py`: password hashing and sessions.
+- `auth.py`: accounts and sessions.
+- `email_login.py`: email delivery and single-use sign-in links.
 - `media.py`: image validation, dimensions, and thumbnails.
 - `assets/`: only assets used by the app.
 - `tests/`: isolated API, import, and image-processing checks.
 - `data/`: private runtime data and restoration backups; excluded from Git.
 
 Pillow is the only runtime dependency. No frontend framework, scroll library, or animation package is installed. Generated screenshots and the standalone component demo have been removed. Database initialization runs only when starting the server; importing modules in tests does not touch the real database.
+
+
+## Shared staging
+
+The existing Vercel configuration builds the public landing page only. Run the
+full app as a separate Python web service, with a separate database and uploads.
+
+For Render, connect this repository and use these settings:
+
+- Build command: `pip install -r requirements.txt`
+- Start command: `python server.py`
+- Set `HOST=0.0.0.0` and `PLUCK_STAGING=1`. Render supplies `PORT`.
+- Attach a persistent disk at `/var/data` and set
+  `MOODBOARD_DATA_DIR=/var/data/pluck`.
+- Set `APP_ORIGIN` to the service's HTTPS URL, without a trailing slash.
+- Set `LOCAL_EMAIL_PREVIEW=0` and `LOCAL_FILLED_LIBRARY=0`.
+- Configure SMTP using the variables in `.env.example` for real email sign-in.
+- Add the staging origin's `/api/auth/x/callback` and
+  `/api/auth/google/callback` URLs in the corresponding provider consoles,
+  then set their client IDs and secrets in Render's environment settings.
+
+After deployment, test sign-in, saving an X post, creating a board, copying an
+image, and deleting it. Restart the service and verify that accounts and saved
+images persist before inviting testers.
+
+Render requires a paid service for a persistent disk. Keep staging credentials
+and data separate from the public launch environment.

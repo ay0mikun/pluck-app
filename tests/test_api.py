@@ -2,16 +2,22 @@ import base64
 import io
 import json
 import os
+import secrets
+import sqlite3
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from contextlib import closing
 from pathlib import Path
 from urllib.error import HTTPError
+from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
 from PIL import Image
+
+from email_login import digest
 
 
 class API(unittest.TestCase):
@@ -23,18 +29,34 @@ class API(unittest.TestCase):
             "PORT": "5199",
             "MOODBOARD_DATA_DIR": cls.temp.name,
             "X_BEARER_TOKEN": "",
+            "LOCAL_EMAIL_PREVIEW": "1",
+            "LOCAL_FILLED_LIBRARY": "0",
+            "APP_ORIGIN": "http://127.0.0.1:5199",
         }
         cls.cookie = None
         cls.start()
+        cls.cookie = cls.sign_in("test@example.com")
+
+    @classmethod
+    def email_token(cls, email, lifetime=60):
+        token = secrets.token_urlsafe(32)
+        now = time.time()
+        with closing(sqlite3.connect(Path(cls.temp.name) / "moodboard.sqlite3")) as con, con:
+            con.execute(
+                "INSERT INTO email_links(token_hash,email,requester,issued,expires) VALUES(?,?,?,?,?)",
+                (digest(token), email, "test", now, now + lifetime),
+            )
+        return token
+
+    @classmethod
+    def sign_in(cls, email):
         req = Request(
-            "http://127.0.0.1:5199/api/auth/continue",
-            data=json.dumps(
-                {"email": "test@example.com", "password": "test-password-123"}
-            ).encode(),
+            "http://127.0.0.1:5199/api/auth/verify",
+            data=json.dumps({"token": cls.email_token(email)}).encode(),
             headers={"Content-Type": "application/json"},
         )
         with urlopen(req) as response:
-            cls.cookie = response.headers["Set-Cookie"].split(";")[0]
+            return response.headers["Set-Cookie"].split(";")[0]
 
     @classmethod
     def start(cls):
@@ -126,25 +148,49 @@ class API(unittest.TestCase):
             any(d["id"] == design["id"] for d in self.call("api/state")[1]["designs"])
         )
 
-    def test_unified_auth(self):
-        credentials = {"email": "unified@example.test", "password": "a-valid-password"}
-        status, created = self.call("api/auth/continue", "POST", credentials)
+    def test_https_staging_origin(self):
+        cls = type(self)
+        original_origin = cls.env["APP_ORIGIN"]
+        cls.proc.terminate()
+        cls.proc.wait()
+        cls.env["APP_ORIGIN"] = "https://pluck-staging.example"
+        try:
+            cls.start()
+            self.assertEqual(
+                self.call("api/boards", "POST", {"name": ""},
+                          origin="https://pluck-staging.example")[0],
+                400,
+            )
+            self.assertEqual(
+                self.call("api/boards", "POST", {"name": "Blocked"},
+                          origin="https://other.example")[0],
+                403,
+            )
+        finally:
+            cls.proc.terminate()
+            cls.proc.wait()
+            cls.env["APP_ORIGIN"] = original_origin
+            cls.start()
+
+    def test_passwordless_auth(self):
+        email = "unified@example.test"
+        status, preview = self.call("api/auth/continue", "POST", {"email": email})
         self.assertEqual(status, 200)
-        status, signed_in = self.call("api/auth/continue", "POST", credentials)
+        link = urlsplit(preview["local_preview"])
+        self.assertEqual(link.netloc, "127.0.0.1:5199")
+        token = parse_qs(link.fragment)["email-token"][0]
+        status, created = self.call("api/auth/verify", "POST", {"token": token})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.call("api/auth/verify", "POST", {"token": token})[0], 400)
+
+        fresh_token = self.email_token(email)
+        status, signed_in = self.call("api/auth/verify", "POST", {"token": fresh_token})
         self.assertEqual(status, 200)
         self.assertEqual(created["user"]["id"], signed_in["user"]["id"])
-        self.assertEqual(
-            self.call(
-                "api/auth/continue",
-                "POST",
-                {**credentials, "password": "wrong-password"},
-            )[0],
-            400,
-        )
-        self.assertEqual(
-            self.call("api/auth/continue", "POST", credentials)[1]["user"]["id"],
-            created["user"]["id"],
-        )
+
+        expired = self.email_token(email, lifetime=-1)
+        self.assertEqual(self.call("api/auth/verify", "POST", {"token": expired})[0], 400)
+        self.assertEqual(self.call("api/auth/continue", "POST", {"email": "bad"})[0], 400)
 
     def test_account_isolation(self):
         _, design = self.call(
@@ -158,15 +204,7 @@ class API(unittest.TestCase):
             },
         )
         first = self.cookie
-        req = Request(
-            "http://127.0.0.1:5199/api/auth/continue",
-            data=json.dumps(
-                {"email": "other@example.com", "password": "another-password"}
-            ).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with urlopen(req) as response:
-            self.cookie = response.headers["Set-Cookie"].split(";")[0]
+        self.cookie = self.sign_in("other@example.com")
         self.assertEqual(self.call("api/state")[1]["designs"], [])
         self.assertEqual(self.call("api/designs/" + design["id"], "DELETE", {})[0], 404)
         self.assertEqual(self.call("uploads/" + design["id"] + ".png")[0], 404)

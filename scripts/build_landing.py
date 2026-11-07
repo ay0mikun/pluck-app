@@ -56,7 +56,7 @@ def build(destination):
 """
     css = (ROOT / "landing.css").read_text(encoding="utf-8")
     assets = set(re.findall(r'assets/[a-zA-Z0-9_.-]+', html + css))
-    assets.update(("assets/geist-OFL.txt", "assets/pluck-mark.svg"))
+    assets.add("assets/geist-OFL.txt")
 
     # Require an empty output directory so stale app files cannot ship.
     destination.mkdir(parents=True, exist_ok=True)
