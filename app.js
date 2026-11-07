@@ -16,6 +16,13 @@ let currentScreen = null,
   galleryFrame,
   toastTimer;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const visitKey = "pluck-visited";
+function hasVisited() {
+  try { return localStorage.getItem(visitKey) === "1"; } catch { return false; }
+}
+function rememberVisit() {
+  try { localStorage.setItem(visitKey, "1"); } catch { /* Storage may be disabled. */ }
+}
 let wheelFrame = 0;
 let wheelTarget = 0;
 
@@ -90,6 +97,7 @@ function toast(message) {
   toastTimer = setTimeout(() => node.hidePopover(), 4000);
 }
 function showScreen(id) {
+  document.documentElement.classList.remove("app-starting");
   const previous = currentScreen;
   if (previous !== id) stopWheelScroll();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
@@ -114,20 +122,27 @@ function showScreen(id) {
 }
 async function route() {
   const hash = location.hash;
-  if (hash === "#auth") return showScreen("auth-screen");
-  if (hash.startsWith("#library")) {
-    if (!user) {
-      location.hash = "auth";
-      return;
-    }
+  if (new URLSearchParams(hash.slice(1)).has("email-token")) {
+    location.reload();
+    return;
+  }
+  if (user) {
+    rememberVisit();
+    if (hash !== "#library") history.replaceState(null, "", "/#library");
+    showScreen("workspace");
     try {
       await refresh();
-      showScreen("workspace");
     } catch (e) {
       toast(e.message);
     }
     return;
   }
+  if (hash === "#auth" || hash.startsWith("#library") || hasVisited()) {
+    rememberVisit();
+    history.replaceState(null, "", "/#auth");
+    return showScreen("auth-screen");
+  }
+  rememberVisit();
   showScreen("landing");
 }
 window.addEventListener("hashchange", route);
@@ -184,13 +199,20 @@ for (const dialog of document.querySelectorAll("dialog")) {
       closeDialog(dialog);
   });
 }
-async function submitting(form, action, message = "Saving…") {
+async function submitting(form, action) {
   const button = form.querySelector("[type=submit]"),
     status = form.querySelector(".form-status");
   const dialog = form.closest("dialog");
+  const label = button.querySelector("span");
+  const loader = button.querySelector("img");
+  const input = form.elements.name;
   button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  label.textContent = "Creating board";
+  loader.hidden = false;
+  input.readOnly = true;
   if (dialog) dialog.dataset.busy = "true";
-  if (status) status.textContent = message;
+  if (status) status.textContent = "";
   try {
     await action();
     if (status) status.textContent = "";
@@ -199,6 +221,10 @@ async function submitting(form, action, message = "Saving…") {
     else toast(e.message);
   } finally {
     button.disabled = false;
+    button.removeAttribute("aria-busy");
+    label.textContent = "Create board";
+    loader.hidden = true;
+    input.readOnly = false;
     if (dialog) delete dialog.dataset.busy;
   }
 }
@@ -514,6 +540,16 @@ function openImportDialog() {
 }
 
 $("#paste-link").onclick = $("#empty-add").onclick = openImportDialog;
+document.querySelectorAll("[data-add-design]").forEach((button) => {
+  button.onclick = () => {
+    if (user) {
+      location.hash = "library";
+      openImportDialog();
+    } else {
+      location.hash = "auth";
+    }
+  };
+});
 importUrl.oninput = () => {
   importStatus.textContent = "";
   setImportState();
@@ -677,7 +713,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
         ${design.source ? `<a class="preview-control preview-icon" href="${escapeHTML(design.source)}" target="_blank" rel="noopener noreferrer" aria-label="Open original X post"><img src="/assets/workspace-x.svg" alt="" /></a>` : ""}
       </div>
       <div class="detail-stage">
-        <img class="detail-image" src="${escapeHTML(design.url)}" width="${design.width}" height="${design.height}" style="--image-ratio: ${design.width / design.height}" alt="${escapeHTML(design.title)}" />
+        <img class="detail-image" src="${escapeHTML(design.thumbnail_url)}" width="${design.width}" height="${design.height}" style="--image-ratio: ${design.width / design.height}" alt="${escapeHTML(design.title)}" decoding="async" fetchpriority="high" />
         <nav class="detail-navigation" aria-label="Browse designs">
           <button id="previous-design" class="preview-control" type="button"${index === 0 ? " disabled" : ""}>${icon("previous")} Previous</button>
           <button id="next-design" class="preview-control" type="button"${index === ids.length - 1 ? " disabled" : ""}>Next ${icon("next")}</button>
@@ -707,6 +743,18 @@ function openDetail(ids, index, focusTarget = "close-preview") {
         </div>
       </aside>
     </div>`;
+
+  const previewImage = $(".detail-image");
+  const sharpPreview = new Image();
+  sharpPreview.decoding = "async";
+  sharpPreview.fetchPriority = "high";
+  sharpPreview.onload = () => {
+    if (previewImage.isConnected) previewImage.src = sharpPreview.src;
+  };
+  sharpPreview.onerror = () => {
+    if (previewImage.isConnected) previewImage.src = design.url;
+  };
+  sharpPreview.src = `/previews/${encodeURIComponent(design.id)}.webp`;
 
   const picker = $(".board-picker");
   const options = $(".board-options");
@@ -945,8 +993,8 @@ async function init() {
       history.replaceState(null, "", "/#auth");
     }
   } catch {
-    toast("Backend unavailable. Start the app with npm start, then refresh.");
-    showScreen("landing");
+    showScreen("auth-screen");
+    $("#auth-status").textContent = "Could not connect to Pluck. Please try again shortly.";
   }
 }
 init();

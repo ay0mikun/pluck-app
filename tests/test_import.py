@@ -3,11 +3,25 @@ import json
 import unittest
 from unittest.mock import Mock, patch
 from urllib.error import HTTPError
+from PIL import Image
 
 import server
 
 
 class ImportTests(unittest.TestCase):
+    def test_avatar_retries_and_caches_profile_photo(self):
+        raw = io.BytesIO()
+        Image.new("RGB", (200, 200), "orange").save(raw, "PNG")
+        opener = Mock()
+        opener.open.side_effect = [TimeoutError(), io.BytesIO(raw.getvalue())]
+        with patch("server.build_opener", return_value=opener), patch("server.object_store.write") as save:
+            path = server.fetch_avatar("https://pbs.twimg.com/profile_images/123/avatar.png")
+        self.assertTrue(path.startswith("/avatars/"))
+        cached = Image.open(io.BytesIO(save.call_args.args[2]))
+        self.assertEqual(cached.size, (64, 64))
+        self.assertEqual(cached.format, "WEBP")
+        self.assertEqual(opener.open.call_count, 2)
+
     def opener(self, payload):
         opener = Mock()
         opener.open.return_value = io.BytesIO(json.dumps(payload).encode())
@@ -99,3 +113,24 @@ class ImportTests(unittest.TestCase):
             with self.assertRaises(server.ImportFailure) as caught:
                 server.fetch_photo("https://pbs.twimg.com/media/a.png")
         self.assertEqual(caught.exception.status, 422)
+
+    def test_photo_retries_transient_failure(self):
+        opener = Mock()
+        opener.open.side_effect = [
+            HTTPError("https://pbs.twimg.com/media/a.jpg", 503, "Busy", {}, None),
+            io.BytesIO(b"image"),
+        ]
+        with patch("server.build_opener", return_value=opener), patch("server.time.sleep"):
+            self.assertEqual(server.fetch_photo("https://pbs.twimg.com/media/a.jpg"), b"image")
+        self.assertEqual(opener.open.call_count, 2)
+
+    def test_photo_blocked_is_not_retried(self):
+        opener = Mock()
+        opener.open.side_effect = HTTPError(
+            "https://pbs.twimg.com/media/a.jpg", 403, "Forbidden", {}, None,
+        )
+        with patch("server.build_opener", return_value=opener):
+            with self.assertRaises(server.ImportFailure) as caught:
+                server.fetch_photo("https://pbs.twimg.com/media/a.jpg")
+        self.assertIn("blocked", caught.exception.message)
+        self.assertEqual(opener.open.call_count, 1)

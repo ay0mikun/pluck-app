@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#111" />
     <meta name="description" content="Your UI inspiration, organized" />
     <title>Pluck</title>
+    <script>document.documentElement.classList.add("app-starting");</script>
     <link rel="icon" href="assets/pluck-logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/pluck-logo.png" />
     <link
@@ -191,7 +192,10 @@
           </div>
           <p id="board-name-error" role="alert" hidden></p>
         </div>
-        <button type="submit" class="button primary" disabled>Create board</button>
+        <button type="submit" class="button primary" disabled>
+          <img class="auth-loader" src="assets/login-loader.svg" width="16" height="16" alt="" hidden />
+          <span>Create board</span>
+        </button>
         <p class="form-status" role="status"></p>
       </form>
     </dialog>

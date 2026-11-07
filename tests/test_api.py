@@ -32,6 +32,9 @@ class API(unittest.TestCase):
             "LOCAL_EMAIL_PREVIEW": "1",
             "LOCAL_FILLED_LIBRARY": "0",
             "APP_ORIGIN": "http://127.0.0.1:5199",
+            "DATABASE_URL": "",
+            "SUPABASE_URL": "",
+            "SUPABASE_SERVICE_ROLE_KEY": "",
         }
         cls.cookie = None
         cls.start()
@@ -132,11 +135,33 @@ class API(unittest.TestCase):
             headers={"Cookie": self.cookie},
         )
         with urlopen(req) as res:
+            etag = res.headers["ETag"]
+            self.assertEqual(res.headers["Vary"], "Cookie")
+            self.assertIn("private", res.headers["Cache-Control"])
             thumb = Image.open(io.BytesIO(res.read()))
             self.assertLessEqual(thumb.width, 720)
             self.assertAlmostEqual(
                 thumb.width / thumb.height, item["width"] / item["height"], places=2
             )
+        cached = Request(req.full_url, headers={"Cookie": self.cookie, "If-None-Match": etag})
+        with self.assertRaises(HTTPError) as unchanged:
+            urlopen(cached)
+        self.assertEqual(unchanged.exception.code, 304)
+        unchanged.exception.close()
+        # A cached media validator cannot bypass account ownership.
+        with self.assertRaises(HTTPError) as unauthorized:
+            urlopen(Request(req.full_url, headers={"If-None-Match": etag}))
+        self.assertEqual(unauthorized.exception.code, 404)
+        unauthorized.exception.close()
+        preview_url = "http://127.0.0.1:5199/previews/" + design["id"] + ".webp"
+        with urlopen(Request(preview_url, headers={"Cookie": self.cookie})) as res:
+            preview = Image.open(io.BytesIO(res.read()))
+            self.assertEqual(preview.size, (item["width"], item["height"]))
+            self.assertEqual(preview.format, "WEBP")
+        with self.assertRaises(HTTPError) as unauthorized_preview:
+            urlopen(preview_url)
+        self.assertEqual(unauthorized_preview.exception.code, 404)
+        unauthorized_preview.exception.close()
         self.call("api/boards/" + board["id"], "PATCH", {"name": "Renamed"})
         self.call("api/boards/" + board["id"], "DELETE", {})
         item = next(

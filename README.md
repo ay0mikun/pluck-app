@@ -1,6 +1,6 @@
 # Pluck
 
-A working local moodboard app implemented from six Figma nodes, using plain HTML/CSS/JavaScript, Python, SQLite, and Pillow. Includes landing, auth, empty library, populated masonry, X import dialog,.
+A design inspiration library built with plain HTML/CSS/JavaScript and Python. Includes passwordless sign-in, X imports, boards, responsive masonry, and image previews. Local development uses SQLite and files; shared staging uses Supabase Postgres and private storage.
 
 ## Run
 
@@ -12,11 +12,11 @@ python3 -m venv .venv
 npm start
 ```
 
-Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 13 tests covering accounts, private media access, persistence, provider behavior, and image processing.
+Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 20 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
 
 ## Accounts and existing data
 
-The login screen supports X and passwordless email. Pluck sends a single-use email link that expires after 15 minutes. After verification, it opens an existing account or creates one for a new address. Existing email accounts keep their library. The first account created claims the legacy library. New accounts start with All. Users create additional moodboards as needed.
+The login screen supports X and passwordless email. Pluck sends a single-use email link that expires after 15 minutes. After verification, it opens an existing account or creates one for a new address. Existing email accounts keep their library. The first account created claims the legacy library. New accounts start with All. Users create additional boards as needed.
 
 For local testing, set `LOCAL_EMAIL_PREVIEW=1` in `.env` and restart. Submitting an email shows an **Open local sign-in link** action. Accounts persist in `data/moodboard.sqlite3`. This mode skips inbox ownership verification and is intended for loopback development only.
 
@@ -33,9 +33,11 @@ Copy `.env.example` to `.env`, fill in the matching client IDs and secrets, and 
 
 ## Images and masonry
 
-Uploads and X imports are decoded and orientation-corrected on the backend. Each record stores `width`, `height`, `url`, and `thumbnail_url` (plus the legacy `image` alias). Original images are preserved at full resolution in orientation-normalized PNGs; WebP thumbnails are bounded by 720 × 1800 pixels without cropping. Legacy records are backfilled automatically at startup. Back up the entire `data/` directory before moving machines or deploying.
+Uploads and X imports are decoded and orientation-corrected on the backend. Each record stores `width`, `height`, `url`, and `thumbnail_url` (plus the legacy `image` alias). Original images are preserved at full resolution in orientation-normalized PNGs; new WebP thumbnails are bounded by 640 × 1600 pixels without cropping. Existing thumbnails retain their saved size. Private media is browser-cached with session-cookie variation. Legacy records are backfilled automatically at startup. Back up the entire `data/` directory before moving machines or deploying.
 
-The frontend reserves image space with stored CSS aspect ratios and positions cards in the shortest equal-width column. Columns: 2 below 701px, 3 through 1100px, 4 on desktop, and 5 above 1799px. Images below the first visible group lazy-load, with a grey ratio-matched skeleton. Only thumbnails are used in the grid; full-resolution images load when opening the lightbox. Tall images cap their preview box at approximately 2.5 times the width, remain uncropped, and offer a full-image view.
+The frontend reserves image space with stored CSS aspect ratios and positions cards in the shortest equal-width column. Columns: 1 below 701px, 3 through 1100px, 4 on desktop, and 5 above 1799px. Images below the first visible group lazy-load, with a grey ratio-matched skeleton. Only thumbnails are used in the grid; full-resolution images load when opening the lightbox. Tall images cap their preview box at approximately 2.5 times the width, remain uncropped, and offer a full-image view.
+
+The preview opens with the cached thumbnail, then swaps to a full-resolution WebP. New imports generate this derivative when saved; existing saves generate it on first preview. Original PNGs remain available for clipboard copying. Derivatives use the same owner checks and private browser cache as other media.
 
 ## X imports
 
@@ -45,16 +47,17 @@ Optionally set `X_BEARER_TOKEN` in `.env` for the official X API. Private, delet
 
 ## Motion
 
-Follows Emil Kowalski's `emil-design-eng` guidance from https://github.com/emilkowalski/skills. Short ease-out modal enter/exit, 140ms press feedback, restrained screen transitions, and image opacity reveals. The landing heading, copy, and button use a 60ms stagger. No gallery entrance stagger or image-load layout animation. Browser-native smooth scrolling respects reduced-motion preferences. Keyboard actions and reduced-motion preferences skip movement. Modals use native dialog focus trapping and Escape handling.
+Follows Emil Kowalski's `emil-design-eng` guidance from https://github.com/emilkowalski/skills. Short ease-out modal enter/exit, 140ms press feedback, restrained screen transitions, and image opacity reveals. The landing heading, copy, and button use a 180ms stagger. No gallery entrance stagger or image-load layout animation. Browser-native smooth scrolling respects reduced-motion preferences. Keyboard actions and reduced-motion preferences skip movement. Modals use native dialog focus trapping and Escape handling.
 
 ## Before public deployment
 
-The server binds to localhost and is a development server. Public deployment still needs HTTPS and a production server, auth/API rate limiting, secure-cookie configuration, production email delivery, production OAuth credentials, managed storage/database and backups, and retention/removal policies. Deleting a design currently removes its record but retains its image files on disk. The reference avatar is a local placeholder, not a fetched account identity.
+The Python HTTP server is intended for development and limited staging tests. Render terminates HTTPS; configure the shared staging credentials below. A public launch needs a production server, broader API rate limiting, backups, and retention/removal policies. Deleting a design currently removes its record but retains its image files on disk. The reference avatar is a local placeholder, not a fetched account identity.
 
 ## Project layout
 
 - `index.html`, `styles.css`, `app.js`: frontend and native browser interactions.
-- `server.py`: HTTP routes and SQLite storage.
+- `server.py`: HTTP routes and application startup.
+- `database.py`, `object_store.py`: local and hosted persistence.
 - `auth.py`: accounts and sessions.
 - `email_login.py`: email delivery and single-use sign-in links.
 - `media.py`: image validation, dimensions, and thumbnails.
@@ -62,31 +65,53 @@ The server binds to localhost and is a development server. Public deployment sti
 - `tests/`: isolated API, import, and image-processing checks.
 - `data/`: private runtime data and restoration backups; excluded from Git.
 
-Pillow is the only runtime dependency. No frontend framework, scroll library, or animation package is installed. Generated screenshots and the standalone component demo have been removed. Database initialization runs only when starting the server; importing modules in tests does not touch the real database.
+Pillow handles images; psycopg connects hosted Postgres. These are the only runtime dependencies. No frontend framework, scroll library, or animation package is installed. Generated screenshots and the standalone component demo have been removed. Database initialization runs only when starting the server; importing modules in tests does not touch the real database.
 
 
 ## Shared staging
 
-The existing Vercel configuration builds the public landing page only. Run the
-full app as a separate Python web service, with a separate database and uploads.
+The `staging` branch includes a free Render Blueprint in `render.yaml`. The
+public landing page continues to use the separate Vercel build.
 
-For Render, connect this repository and use these settings:
+1. Create a Supabase project. In Storage, create a **private** bucket named
+   `pluck-media`. The backend rejects a public bucket.
+2. Copy the **Transaction pooler** URI from Supabase's **Connect** dialog into
+   `DATABASE_URL`, replacing the password placeholder. Use an URL-encoded
+   password if it contains URI punctuation.
+3. Set `SUPABASE_URL` and the legacy `SUPABASE_SERVICE_ROLE_KEY`. These keys stay
+   on the Python server. Media is served through the existing owner-checked
+   routes. Supabase tables live in the separate `pluck` schema.
+4. Create a Resend sending key and verify your sending domain. Set
+   `RESEND_API_KEY` and `EMAIL_FROM`, for example
+   `Pluck <hello@yourdomain.com>`. The Resend test sender only delivers to the
+   account owner's verified address, so it is insufficient for other testers.
+5. In Render, create a **Blueprint** from this repository's `staging` branch.
+   Supply the requested environment variables. Set `APP_ORIGIN` to the service's
+   HTTPS URL without a trailing slash. If necessary, update it after Render
+   assigns the service URL, then redeploy.
+6. To enable X sign-in, add `X_OAUTH_CLIENT_ID` and
+   `X_OAUTH_CLIENT_SECRET` to Render. Add
+   `https://YOUR-SERVICE.onrender.com/api/auth/x/callback` to the X developer
+   app's allowed callback URLs. Use the matching Google callback path if Google
+   is enabled.
+7. Test sign-in, X import, board creation, image copying and deletion. Redeploy
+   and verify accounts and saved images still persist before inviting testers.
 
-- Build command: `pip install -r requirements.txt`
-- Start command: `python server.py`
-- Set `HOST=0.0.0.0` and `PLUCK_STAGING=1`. Render supplies `PORT`.
-- Attach a persistent disk at `/var/data` and set
-  `MOODBOARD_DATA_DIR=/var/data/pluck`.
-- Set `APP_ORIGIN` to the service's HTTPS URL, without a trailing slash.
-- Set `LOCAL_EMAIL_PREVIEW=0` and `LOCAL_FILLED_LIBRARY=0`.
-- Configure SMTP using the variables in `.env.example` for real email sign-in.
-- Add the staging origin's `/api/auth/x/callback` and
-  `/api/auth/google/callback` URLs in the corresponding provider consoles,
-  then set their client IDs and secrets in Render's environment settings.
+Render supplies `PORT`. The Blueprint binds to `0.0.0.0`, enables the full-app
+landing buttons, and disables local mock sign-in. Render serves the application,
+Supabase stores Postgres records and private media, and Resend sends email links
+over HTTPS. No Render persistent disk is needed.
 
-After deployment, test sign-in, saving an X post, creating a board, copying an
-image, and deleting it. Restart the service and verify that accounts and saved
-images persist before inviting testers.
+Existing local data is not automatically copied to Supabase. Staging starts
+with separate accounts and boards. Keep the local `.env` out of Git and copy
+only the relevant values into Render's environment settings.
 
-Render requires a paid service for a persistent disk. Keep staging credentials
-and data separate from the public launch environment.
+Free Render services sleep after inactivity. Supabase and Resend free tiers
+have usage limits. Resend requires a domain you control to send to other testers.
+
+## Development storage
+
+Without `DATABASE_URL` and Supabase variables, the app uses the existing local
+SQLite database and files. `LOCAL_EMAIL_PREVIEW=1` works only on loopback.
+Keep hosted keys out of a local mock environment if you want to test isolated
+SQLite accounts.

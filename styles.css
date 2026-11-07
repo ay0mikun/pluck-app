@@ -18,6 +18,9 @@ body {
   margin: 0;
   min-height: 100dvh;
 }
+.app-starting .screen {
+  visibility: hidden;
+}
 html:has(.workspace:not([hidden])) {
   scrollbar-gutter: stable;
 }
@@ -926,6 +929,7 @@ dialog:hover > .close {
   object-fit: contain;
   margin: auto;
   border-radius: 6px;
+  corner-shape: round;
 }
 .detail-info h2 {
   font: 400 20px/1.15 "Geist Serif", Georgia, serif;
@@ -1375,6 +1379,10 @@ dialog,
 }
 #board-form .form-status:empty { display: none; }
 #board-form .primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   height: 34px;
   min-height: 0;
   border: 0;
