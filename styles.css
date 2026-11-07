@@ -470,26 +470,6 @@ textarea {
   transition: background-color 150ms ease, color 150ms ease;
 }
 
-.board-picker-panel::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto auto 0;
-  z-index: -1;
-  width: var(--hover-width, 0px);
-  height: var(--hover-height, 0px);
-  border-radius: 12px;
-  background: var(--hover-color, #171717);
-  transform: translate(var(--hover-x, 0px), var(--hover-y, 0px));
-  opacity: 0;
-  pointer-events: none;
-  transition: transform 280ms var(--ease-out), width 280ms var(--ease-out),
-    height 280ms var(--ease-out), opacity 120ms ease;
-}
-.board-picker-panel[data-hover-fill="visible"]::after { opacity: 1; }
-@media (prefers-reduced-motion: reduce) {
-  .board-picker-panel::after { transition: none; }
-}
-
 .filter.active {
   background: #1f1f1f;
   color: #fefefe;
@@ -1024,7 +1004,6 @@ dialog:hover > .close {
 .board-picker-panel {
   position: relative;
   isolation: isolate;
-  --hover-color: #212121;
   width: min(240px, 100%);
   margin-top: 6px;
   overflow: hidden;
@@ -1103,6 +1082,10 @@ dialog:hover > .close {
 }
 .board-options label:has(input:focus-visible),
 .board-create:focus-visible { background: #212121; }
+@media (hover: hover) and (pointer: fine) {
+  .board-options label:hover,
+  .board-create:hover { background: #212121; }
+}
 .board-create {
   width: 100%;
   height: 34px;
@@ -1177,7 +1160,7 @@ dialog:hover > .close {
   }
   @media (prefers-reduced-motion: no-preference) {
     .board-picker summary img {
-      transition: transform 220ms var(--ease-out);
+      transition: transform 160ms ease-out;
     }
   }
   .board-picker[data-expanded] > summary img {
@@ -1380,7 +1363,7 @@ dialog,
   background: var(--modal-fill);
   border: 1px solid var(--modal-border);
   border-radius: 24px;
-  transform: translateY(24px);
+  transform: translateY(12px);
 }
 .board-drawer .board-picker-panel {
   width: 100%;
@@ -1389,6 +1372,12 @@ dialog,
   outline: none;
   border: 0;
   box-shadow: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .board-drawer.closing { transform: translateY(6px); }
+  @starting-style {
+    .board-drawer[open] { transform: translateY(12px); }
+  }
 }
 .board-drawer h3 {
   padding: 16px 56px 16px 16px;

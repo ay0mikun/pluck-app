@@ -368,33 +368,6 @@ mobileAccount.addEventListener("change", () => {
 });
 const filters = $("#filters");
 
-function followHover(container, selector) {
-  let previous;
-  const hide = () => {
-    previous = null;
-    container.removeAttribute("data-hover-fill");
-  };
-  container.addEventListener("pointerover", (event) => {
-    if (event.pointerType !== "mouse") return;
-    const item = event.target.closest(selector);
-    if (!item || item === previous) return;
-    previous = item;
-    const bounds = container.getBoundingClientRect();
-    const row = item.getBoundingClientRect();
-    const visible = item.closest(".board-options")?.getBoundingClientRect();
-    const top = visible ? Math.max(row.top, visible.top) : row.top;
-    const bottom = visible ? Math.min(row.bottom, visible.bottom) : row.bottom;
-    container.style.setProperty("--hover-x", `${row.left - bounds.left + container.scrollLeft}px`);
-    container.style.setProperty("--hover-y", `${top - bounds.top + container.scrollTop}px`);
-    container.style.setProperty("--hover-width", `${row.width}px`);
-    container.style.setProperty("--hover-height", `${Math.max(0, bottom - top)}px`);
-    container.dataset.hoverFill = item.matches(".active") ? "selected" : "visible";
-  });
-  container.addEventListener("pointerleave", hide);
-  container.addEventListener("scroll", hide, { capture: true, passive: true });
-  return hide;
-}
-
 function render() {
   const boardCounts = new Map();
   for (const design of state.designs) {
@@ -785,12 +758,6 @@ function openDetail(ids, index, focusTarget = "close-preview") {
 
   const picker = $(".board-picker");
   const options = $(".board-options");
-  const clearBoardHover = followHover(
-    picker.querySelector(".board-picker-panel"), ".board-options label, .board-create",
-  );
-  picker.addEventListener("toggle", () => {
-    if (!picker.open) clearBoardHover();
-  });
   const summary = picker.querySelector("summary");
   const panel = picker.querySelector(".board-picker-panel");
   const pickerHeading = panel.querySelector("h3");
@@ -815,9 +782,9 @@ function openDetail(ids, index, focusTarget = "close-preview") {
       return;
     }
     pickerMotion = panel.animate([
-      { opacity: 0, transform: "translateY(-8px) scale(.98, .92)" },
+      { opacity: 0, transform: "translateY(-3px)" },
       { opacity: 1, transform: "none" },
-    ], { duration: 230, easing: "cubic-bezier(.25,.65,.3,1)", fill: "both" });
+    ], { duration: 160, easing: "ease-out", fill: "both" });
     pickerMotion.onfinish = () => {
       if (!pickerExpanded) {
         picker.open = false;
@@ -869,7 +836,6 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     drawer.addEventListener("close", () => {
       if (activeDrawer === drawer) activeDrawer = null;
       if (document.activeElement === summary) dialog.focus({ preventScroll: true });
-      clearBoardHover();
       pickerHeading.removeAttribute("id");
       pickerHeading.textContent = "Select board";
       picker.append(panel);
