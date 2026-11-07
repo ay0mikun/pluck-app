@@ -12,6 +12,16 @@
   font-display: swap;
 }
 
+/* Approximate Figma's 60% smoothing while retaining each corner's radius. */
+:where(*, *::before, *::after) {
+  corner-shape: superellipse(1.6);
+}
+
+html {
+  background: #111;
+  color-scheme: dark;
+}
+
 .landing {
   min-height: 100svh;
   display: flex;

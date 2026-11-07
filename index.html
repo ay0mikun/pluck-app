@@ -10,9 +10,9 @@
     <link rel="apple-touch-icon" href="assets/pluck-logo.png" />
     <link
       rel="preload"
-      href="assets/inter-variable.ttf"
+      href="assets/geist-sans.woff2"
       as="font"
-      type="font/ttf"
+      type="font/woff2"
       crossorigin
     />
     <link rel="stylesheet" href="styles.css" />
@@ -37,7 +37,7 @@
           <h1>Stop losing great UI in your X bookmarks.</h1>
           <p>
             Paste a tweet link and the design is saved to your library, ready
-            to sort into moodboards.
+            to sort into boards.
           </p>
           <button id="coming-soon" type="button" class="launch-button" data-coming-soon>
             Coming soon
@@ -53,40 +53,33 @@
     >
       <main class="auth-card">
         <div class="auth-heading">
-          <a href="#" aria-label="Back to home"
-            ><img src="assets/auth-logo.svg" width="60" height="60" alt=""
-          /></a>
-          <h1>Never miss another great<br />design on X</h1>
+          <a href="#" aria-label="Back to home">
+            <img src="assets/login-logo.svg" width="52" height="52" alt="" />
+          </a>
+          <h1>Never miss another design inspiration on X</h1>
         </div>
         <div class="auth-fields">
-          <div class="social-buttons">
-            <button class="button secondary" data-oauth="Google">
-              Continue with Google</button
-            ><button class="button secondary" data-oauth="X">
-              Continue with X
+          <a class="auth-button auth-provider" href="/api/auth/x/start">
+            <img src="assets/login-x.svg" alt="" /> Continue with X
+          </a>
+          <span class="auth-divider">Or</span>
+          <form id="auth-form" autocomplete="off" novalidate>
+            <div class="input-field">
+              <label for="auth-email">Email address</label>
+              <div class="auth-input input-shell">
+                <input id="auth-email" name="email" type="email"
+                  placeholder="Enter your email address" autocomplete="off"
+                  autocapitalize="off" autocorrect="off" spellcheck="false"
+                  maxlength="254" aria-describedby="auth-email-error" required />
+                <img src="assets/login-error.svg" alt="" />
+              </div>
+              <div class="auth-error" id="auth-email-error" aria-live="polite"><span></span></div>
+            </div>
+            <button class="auth-button auth-submit" type="submit">
+              <img class="auth-loader" src="assets/login-loader.svg" alt="" hidden />
+              <span>Log in</span>
             </button>
-          </div>
-          <span class="or">Or</span>
-          <form id="auth-form">
-            <label
-              >Email address<input
-                name="email"
-                type="email"
-                placeholder="Enter your email address"
-                autocomplete="email"
-                maxlength="254"
-                required /></label
-            ><label
-              >Password<input
-                name="password"
-                type="password"
-                placeholder="Enter your password"
-                autocomplete="current-password"
-                minlength="8"
-                maxlength="128"
-                required /></label
-            ><button class="button primary" type="submit">Get started</button>
-            <p class="form-status" id="auth-status" role="status"></p>
+            <p id="auth-status" role="status"></p>
           </form>
         </div>
       </main>
@@ -99,11 +92,11 @@
     >
       <header class="navigation workspace-nav">
         <a href="#library" aria-label="All designs"
-          ><img src="assets/logo.svg" width="40" height="40" alt=""
+          ><img src="assets/workspace-logo.svg" width="40" height="40" alt=""
         /></a>
         <nav>
           <button class="button secondary" id="paste-link">
-            <span class="x-icon"><img src="assets/x.svg" alt="" /></span>Paste
+            <span class="x-icon"><img src="assets/workspace-x.svg" alt="" /></span>Paste
             link</button
           ><button
             class="avatar-button"
@@ -112,33 +105,27 @@
             aria-expanded="false"
             popovertarget="account-menu"
           >
-            <img src="assets/user-avatar.png" width="38" height="38" alt="" />
+            <img src="assets/user-avatar.webp" width="34" height="34" alt="" />
           </button>
         </nav>
       </header>
-      <div id="account-menu" class="account-menu" popover>
-        <p id="account-email"></p>
-        <label class="sr-only" for="search">Search designs</label
-        ><input
-          type="search"
-          id="search"
-          placeholder="Search your designs…"
-        /><button id="new-board" class="menu-button">New moodboard</button
-        ><button id="upload-design" class="menu-button">Upload image</button
-        ><button class="menu-button" type="button" data-oauth="Google">Connect Google</button>
-        <button class="menu-button" type="button" data-oauth="X">Connect X</button>
-        <button id="logout" class="menu-button">Sign out</button>
+      <div id="account-menu" class="account-menu" popover aria-labelledby="account-menu-title">
+        <h2 id="account-menu-title">Account menu</h2>
+        <div class="account-options">
+          <button id="upload-design" class="menu-button account-upload" type="button" disabled>
+            <span>Upload image</span><span class="coming-soon-badge">coming soon</span>
+          </button>
+          <a class="menu-button" href="https://github.com/ay0mikun/pluck-app/blob/main/README.md" target="_blank" rel="noopener noreferrer">Documentation</a>
+        </div>
+        <div class="account-footer">
+          <button id="logout" class="menu-button" type="button"><img src="assets/account-logout.svg" width="16" height="16" alt="" />Log out</button>
+        </div>
       </div>
-      <nav id="filters" class="filters" aria-label="Moodboards"></nav>
+      <dialog id="account-drawer" class="board-drawer account-drawer" aria-labelledby="account-menu-title"></dialog>
+      <nav id="filters" class="filters" aria-label="Boards"></nav>
       <main class="gallery-content">
         <div class="gallery-meta">
           <p id="item-count"></p>
-          <div id="board-actions" hidden>
-            <button id="rename-board" class="text-button">Rename</button
-            ><button id="delete-board" class="text-button">
-              Delete moodboard
-            </button>
-          </div>
         </div>
         <div
           id="design-grid"
@@ -148,91 +135,63 @@
         <div id="empty-state" class="empty-state" hidden data-node-id="38:2096">
           <h1>Add your first design from X</h1>
           <p>Paste a tweet link to save your first design.</p>
-          <button class="button primary" id="empty-add">
-            Add my first design
+          <button class="button secondary" id="empty-add">
+            <img src="assets/workspace-add.svg" alt="" />
+            <span>Add my first design</span>
           </button>
         </div>
       </main>
     </section>
-    <dialog
-      id="import-dialog"
-      class="import-dialog"
-      aria-labelledby="import-title"
-      data-node-id="38:2441"
-    >
-      <button type="button" class="close" aria-label="Close dialog">×</button>
-      <h2 id="import-title">Save from X</h2>
-      <p class="dialog-intro">
-        Paste a link to a tweet that has a design in it.
-      </p>
-      <form id="import-form">
-        <label for="tweet-url">X post link</label
-        ><input
-          id="tweet-url"
-          type="url"
-          placeholder="https://x.com/user..."
-          required
-        />
-        <div class="import-actions">
-          <button type="submit" class="button primary">
-            <span class="spinner" hidden></span
-            ><span class="button-label">Fetch designs</span></button
-          ><button type="button" class="button plain" id="paste-clipboard">
-            Paste from keyboard
-          </button>
+    <dialog id="import-dialog" class="import-dialog" aria-labelledby="import-title">
+      <header class="import-header">
+        <h2 id="import-title">Save a design</h2>
+        <button type="button" class="close" aria-label="Close dialog" autofocus>
+          <img src="assets/import-close.svg" alt="" />
+        </button>
+      </header>
+      <form id="import-form" autocomplete="off" novalidate>
+        <div class="input-field">
+          <label for="tweet-url">Link to X post</label>
+          <div class="import-input input-shell">
+            <input id="tweet-url" type="url" autocomplete="off"
+              autocapitalize="off" autocorrect="off" spellcheck="false"
+              placeholder="https://x.com/examplepost" maxlength="2000"
+              aria-describedby="import-error import-status" required />
+            <img src="assets/import-error.svg" alt="" hidden />
+          </div>
+          <p id="import-error" role="alert" hidden></p>
         </div>
-        <p class="form-status" id="import-status" role="status"></p>
+        <div class="import-actions">
+          <button type="submit" class="button primary" data-muted>
+            <img class="auth-loader" src="assets/login-loader.svg" alt="" hidden />
+            <span class="button-label">Fetch designs</span>
+          </button>
+          <button type="button" class="button plain" id="paste-clipboard">
+            Paste from clipboard
+          </button>
+          <p class="form-status" id="import-status" role="status"></p>
+        </div>
       </form>
     </dialog>
-    <dialog id="upload-dialog" aria-labelledby="upload-title">
-      <button class="close" aria-label="Close dialog">×</button>
-      <h2 id="upload-title">Upload a design</h2>
-      <form id="upload-form">
-        <label class="dropzone"
-          >Choose an image<span>PNG, JPG, GIF or WebP · up to 10 MB</span
-          ><input
-            id="image-file"
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            required /></label
-        ><label
-          >Title<input
-            name="title"
-            maxlength="200"
-            placeholder="A design worth keeping"
-            required /></label
-        ><label
-          >Creator<input
-            name="creator"
-            maxlength="200"
-            placeholder="@designer" /></label
-        ><label
-          >Source link<input
-            name="source"
-            type="url"
-            placeholder="https://…" /></label
-        ><label
-          >Notes<textarea
-            name="notes"
-            rows="2"
-            maxlength="5000"
-            placeholder="What caught your eye?"
-          ></textarea></label
-        ><button type="submit" class="button primary">Save design</button>
-        <p class="form-status" role="status"></p>
-      </form>
-    </dialog>
-    <dialog id="board-dialog" aria-labelledby="board-title">
-      <button class="close" aria-label="Close dialog">×</button>
-      <form id="board-form">
-        <h2 id="board-title">New moodboard</h2>
-        <label
-          >Name<input
-            name="name"
-            maxlength="80"
-            placeholder="e.g. Settings screens"
-            required /></label
-        ><button type="submit" class="button primary">Save moodboard</button>
+    <dialog id="board-dialog" class="board-dialog" aria-labelledby="board-title">
+      <header class="import-header">
+        <h2 id="board-title">Create new board</h2>
+        <button class="close" type="button" aria-label="Close dialog" autofocus>
+          <img src="assets/import-close.svg" alt="" />
+        </button>
+      </header>
+      <form id="board-form" novalidate>
+        <div class="input-field">
+          <label for="board-name">What would you like to name your board?</label>
+          <div class="input-shell">
+            <input id="board-name" name="name" placeholder="E.g, mobile, web design..."
+              autocomplete="off" spellcheck="false"
+              aria-describedby="board-name-count board-name-error" required />
+            <span class="input-count" id="board-name-count"></span>
+          </div>
+          <p id="board-name-error" role="alert" hidden></p>
+        </div>
+        <button type="submit" class="button primary" disabled>Create board</button>
         <p class="form-status" role="status"></p>
       </form>
     </dialog>
@@ -241,18 +200,24 @@
       class="detail-dialog"
       aria-labelledby="detail-title"
     >
-      <button class="close" aria-label="Close dialog">×</button>
       <div id="detail-content"></div>
     </dialog>
-    <dialog id="confirm-dialog" aria-labelledby="confirm-title">
-      <h2 id="confirm-title">Delete this item?</h2>
-      <p id="confirm-description"></p>
-      <div class="confirm-actions">
-        <button class="button secondary" id="cancel-delete">Cancel</button
-        ><button class="button primary" id="confirm-delete">Delete</button>
+    <dialog id="confirm-dialog" class="delete-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description">
+      <header class="import-header">
+        <h2 id="confirm-title">Delete image?</h2>
+        <button class="close" type="button" aria-label="Close dialog" autofocus>
+          <img src="assets/import-close.svg" alt="" />
+        </button>
+      </header>
+      <div class="delete-body">
+        <p id="confirm-description"></p>
+        <div class="confirm-actions">
+          <button class="button secondary" id="cancel-delete">Cancel</button>
+          <button class="button primary" id="confirm-delete">Delete</button>
+        </div>
+        <p class="form-status" role="status"></p>
       </div>
-      <p class="form-status" role="status"></p>
     </dialog>
-    <div id="toast" role="status" hidden></div>
+    <div id="toast" role="status" popover="manual"></div>
   </body>
 </html>

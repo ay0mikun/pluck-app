@@ -16,8 +16,9 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from PIL import Image
 
+import email_login
 import oauth
-from auth import authenticate, session_user
+from auth import session_user
 from media import prepare_image
 
 ROOT = Path(__file__).resolve().parent
@@ -45,6 +46,22 @@ def store_image(identifier, raw):
     (UPLOADS / (identifier + ".png")).write_bytes(full)
     (THUMBNAILS / (identifier + ".webp")).write_bytes(thumbnail)
     return width, height, f"/uploads/{identifier}.png", f"/thumbnails/{identifier}.webp"
+
+
+def seed_library_preview(con, owner):
+    if con.execute("SELECT 1 FROM designs WHERE owner_id=? LIMIT 1", (owner,)).fetchone():
+        return
+    for filename, title in (
+        ("interface.webp", "Interface design sample"),
+        ("comparison.webp", "Comparison layout sample"),
+    ):
+        identifier = uuid.uuid4().hex
+        raw = (ROOT / "fixtures" / "library" / filename).read_bytes()
+        width, height, url, thumbnail = store_image(identifier, raw)
+        con.execute(
+            "INSERT INTO designs(id,title,image,width,height,url,thumbnail_url,owner_id) VALUES(?,?,?,?,?,?,?,?)",
+            (identifier, title, url, width, height, url, thumbnail, owner),
+        )
 
 
 def backfill_images():
@@ -370,6 +387,9 @@ class Handler(BaseHTTPRequestHandler):
             ".woff2": "font/woff2",
         }
         body = file.read_bytes()
+        if file == ROOT / "index.html" and os.environ.get("PLUCK_STAGING") == "1":
+            body = body.replace(b"data-coming-soon", b"data-get-started")
+            body = body.replace(b"Coming soon", b"Get started")
         self.send_response(200)
         self.send_header(
             "Content-Type", types.get(file.suffix, "application/octet-stream")
@@ -389,9 +409,10 @@ class Handler(BaseHTTPRequestHandler):
         self.mutate("DELETE")
 
     def mutate(self, method):
-        # Local API accepts same-origin JSON only; no cross-origin writes.
+        # APP_ORIGIN is the public HTTPS origin when running behind a proxy.
         origin = self.headers.get("Origin")
-        if origin and origin not in (f"http://{self.headers.get('Host')}",):
+        expected_origin = os.environ.get("APP_ORIGIN", f"http://{self.headers.get('Host')}").rstrip("/")
+        if origin and origin != expected_origin:
             return self.respond(403, {"error": "Cross-origin writes are not allowed."})
         try:
             if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
@@ -406,19 +427,27 @@ class Handler(BaseHTTPRequestHandler):
             with db() as con:
                 if path == "/api/auth/continue" and method == "POST":
                     email = clean(body.get("email"), 254).lower()
-                    if email.endswith("@oauth.invalid"):
-                        raise ValueError("Continue with your original sign-in provider.")
-                    password = body.get("password", "")
-                    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+                    if email.endswith("@oauth.invalid") or not re.fullmatch(
+                        r"[^\s@,;<>\x00-\x1f]+@[^\s@,;<>\x00-\x1f]+\.[^\s@,;<>\x00-\x1f]+", email
+                    ):
                         raise ValueError("Enter a valid email address.")
-                    if not isinstance(password, str) or not 8 <= len(password) <= 128:
-                        raise ValueError("Use a password between 8 and 128 characters.")
-                    con.execute("BEGIN IMMEDIATE")
-                    create_account = not con.execute(
-                        "SELECT 1 FROM users WHERE email=?", (email,)
-                    ).fetchone()
-                    user, cookie = authenticate(con, email, password, create_account)
+                    preview = email_login.send_link(
+                        con, email, self.client_address[0], oauth.app_origin(self)
+                    )
+                    result = {"ok": True}
+                    if preview:
+                        result["local_preview"] = preview
+                    return self.respond(200, result)
+                if path == "/api/auth/verify" and method == "POST":
+                    token = clean(body.get("token"), 100)
+                    user, cookie = email_login.verify(con, token)
+                    if os.environ.get("LOCAL_FILLED_LIBRARY") == "1" and email_login.local_preview_enabled(
+                        self.client_address[0], oauth.app_origin(self)
+                    ):
+                        seed_library_preview(con, user["id"])
                     con.commit()
+                    if os.environ.get("APP_ORIGIN", "").startswith("https://"):
+                        cookie += "; Secure"
                     return self.respond(200, {"user": user}, cookie)
                 user = session_user(self.headers, con)
                 if not user:
@@ -433,9 +462,11 @@ class Handler(BaseHTTPRequestHandler):
                         "moodboard_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
                     )
                 if path == "/api/boards" and method == "POST":
-                    name = clean(body.get("name"), 80)
+                    name = clean(body.get("name"), 81)
                     if not name:
-                        raise ValueError("Name your moodboard.")
+                        raise ValueError("Name your board.")
+                    if len(name) > 15:
+                        raise ValueError("Name should not be more than 15 characters.")
                     identifier = uuid.uuid4().hex
                     con.execute(
                         "INSERT INTO boards(id,name,owner_id) VALUES(?,?,?)",
@@ -449,13 +480,15 @@ class Handler(BaseHTTPRequestHandler):
                         "SELECT 1 FROM boards WHERE id=? AND owner_id=?",
                         (match[1], owner),
                     ).fetchone():
-                        return self.respond(404, {"error": "Moodboard not found."})
+                        return self.respond(404, {"error": "Board not found."})
                     if method == "DELETE":
                         con.execute("DELETE FROM boards WHERE id=?", (match[1],))
                     else:
-                        name = clean(body.get("name"), 80)
+                        name = clean(body.get("name"), 81)
                         if not name:
-                            raise ValueError("Name your moodboard.")
+                            raise ValueError("Name your board.")
+                        if len(name) > 15:
+                            raise ValueError("Name should not be more than 15 characters.")
                         con.execute(
                             "UPDATE boards SET name=? WHERE id=?", (name, match[1])
                         )
@@ -558,7 +591,7 @@ class Handler(BaseHTTPRequestHandler):
                             ).fetchone()
                             for b in boards
                         ):
-                            raise ValueError("Choose valid moodboards.")
+                            raise ValueError("Choose valid boards.")
                         con.execute(
                             "DELETE FROM board_designs WHERE design_id=?", (match[1],)
                         )
@@ -618,7 +651,24 @@ def initialize_storage():
             "CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,email TEXT UNIQUE NOT NULL,salt TEXT NOT NULL,password_hash TEXT NOT NULL); CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id) ON DELETE CASCADE,expires REAL NOT NULL);"
         )
     with db() as con:
-        con.executescript(oauth.SCHEMA)
+        con.executescript(oauth.SCHEMA + email_login.SCHEMA)
+    with db() as con:
+        con.execute("BEGIN IMMEDIATE")
+        if con.execute("PRAGMA user_version").fetchone()[0] == 0:
+            defaults = ["Mobile", "Desktop", "Web", "Branding", "Motion", "Poster"]
+            for user in con.execute("SELECT id FROM users"):
+                boards = con.execute(
+                    "SELECT id,name,rowid FROM boards WHERE owner_id=? ORDER BY rowid LIMIT 6",
+                    (user["id"],),
+                ).fetchall()
+                # Older versions created these six boards together, in this order.
+                if [board["name"] for board in boards] == defaults and boards[-1]["rowid"] - boards[0]["rowid"] == 5:
+                    con.executemany(
+                        "DELETE FROM boards WHERE id=? AND NOT EXISTS "
+                        "(SELECT 1 FROM board_designs WHERE board_id=boards.id)",
+                        [(board["id"],) for board in boards],
+                    )
+            con.execute("PRAGMA user_version=1")
     backfill_images()
 
 
@@ -627,7 +677,9 @@ def load_local_env(path):
     if not path.is_file():
         return
     allowed = {
-        "PORT", "APP_ORIGIN", "X_BEARER_TOKEN",
+        "PORT", "HOST", "APP_ORIGIN", "PLUCK_STAGING", "X_BEARER_TOKEN",
+        "LOCAL_EMAIL_PREVIEW", "LOCAL_FILLED_LIBRARY",
+        "SMTP_HOST", "SMTP_PORT", "SMTP_FROM", "SMTP_USERNAME", "SMTP_PASSWORD",
         "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET",
         "X_OAUTH_CLIENT_ID", "X_OAUTH_CLIENT_SECRET",
     }
@@ -646,5 +698,6 @@ if __name__ == "__main__":
     load_local_env(ROOT / ".env")
     initialize_storage()
     port = int(os.environ.get("PORT", "5173"))
-    print(f"Pluck running at http://127.0.0.1:{port}", flush=True)
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    host = os.environ.get("HOST", "127.0.0.1")
+    print(f"Pluck running at http://{host}:{port}", flush=True)
+    ThreadingHTTPServer((host, port), Handler).serve_forever()

@@ -46,12 +46,7 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def settings(provider, handler):
-    prefix = provider.upper() + "_OAUTH_"
-    client_id = os.environ.get(prefix + "CLIENT_ID")
-    secret = os.environ.get(prefix + "CLIENT_SECRET")
-    if not client_id or not secret:
-        raise ValueError("This provider needs OAuth credentials on the server.")
+def app_origin(handler):
     port = handler.server.server_port
     host = handler.headers.get("Host")
     origin = os.environ.get("APP_ORIGIN")
@@ -62,9 +57,17 @@ def settings(provider, handler):
         parsed.scheme == "https"
         or (parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1"))
     ) or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
-        raise ValueError("Open the app using its configured OAuth origin.")
-    return client_id, secret, origin.rstrip("/") + f"/api/auth/{provider}/callback"
+        raise ValueError("Open the app using its configured origin.")
+    return origin.rstrip("/")
 
+
+def settings(provider, handler):
+    prefix = provider.upper() + "_OAUTH_"
+    client_id = os.environ.get(prefix + "CLIENT_ID")
+    secret = os.environ.get(prefix + "CLIENT_SECRET")
+    if not client_id or not secret:
+        raise ValueError("This provider needs OAuth credentials on the server.")
+    return client_id, secret, app_origin(handler) + f"/api/auth/{provider}/callback"
 
 def start(con, provider, handler):
     client_id, _, callback = settings(provider, handler)
@@ -142,7 +145,7 @@ def sign_in(con, provider, subject, email, link_user):
             identifier = link_user
         else:
             if email and con.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone():
-                raise ValueError("Sign in with your existing password, then connect Google from the account menu.")
+                raise ValueError("Sign in with your email link, then connect Google from the account menu.")
             placeholder = hashlib.sha256(f"{provider}:{subject}".encode()).hexdigest()
             identifier = create_user(con, email or f"{placeholder}@oauth.invalid")
         con.execute("INSERT INTO oauth_identities VALUES(?,?,?)", (provider, subject, identifier))
