@@ -120,10 +120,6 @@ nav {
   border-color: var(--line);
   color: #0e0e0e;
 }
-.plain {
-  background: transparent;
-  color: rgba(14, 14, 14, 0.8);
-}
 .x-icon {
   width: 14px;
   height: 14px;
@@ -910,14 +906,6 @@ dialog:hover > .close {
   opacity: 1;
   background: #b8b8b8;
   color: #555;
-}
-
-.import-actions .plain {
-  color: inherit;
-}
-
-.import-actions .plain:hover {
-  background: #171717;
 }
 
 @media (max-width: 700px) {

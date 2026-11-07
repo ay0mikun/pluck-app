@@ -558,7 +558,6 @@ const importDialog = $("#import-dialog");
 const importForm = $("#import-form");
 const importUrl = $("#tweet-url");
 const importButton = importForm.querySelector("[type=submit]");
-const importPaste = $("#paste-clipboard");
 const importStatus = $("#import-status");
 const importError = $("#import-error");
 
@@ -575,7 +574,6 @@ function setImportState(error = "") {
   importButton.querySelector(".button-label").textContent = error
     ? "Enter a valid link"
     : busy ? "Fetching designs" : "Fetch designs";
-  importPaste.hidden = busy || Boolean(error);
 }
 
 function openImportDialog() {
@@ -598,20 +596,6 @@ document.querySelectorAll("[data-add-design]").forEach((button) => {
 importUrl.oninput = () => {
   importStatus.textContent = "";
   setImportState();
-};
-
-importPaste.onclick = async () => {
-  try {
-    const value = await navigator.clipboard.readText();
-    if (!importDialog.open || importButton.disabled) return;
-    importUrl.value = value.trim();
-    importUrl.oninput();
-    importUrl.focus();
-  } catch {
-    if (!importDialog.open || importButton.disabled) return;
-    importUrl.focus();
-    importStatus.textContent = "Use ⌘V or Ctrl+V to paste your X post link.";
-  }
 };
 
 importForm.onsubmit = async (event) => {
