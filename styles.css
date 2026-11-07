@@ -10,6 +10,8 @@
   --line: #eaebe6;
   --muted: rgba(0, 0, 0, 0.6);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --modal-fill: #161616;
+  --modal-border: #282828;
 }
 * {
   box-sizing: border-box;
@@ -825,7 +827,8 @@ dialog:hover > .close {
 .import-dialog {
   width: min(420px, calc(100% - 40px));
   padding: 0;
-  background: #111;
+  background: var(--modal-fill);
+  border: 1px solid var(--modal-border);
   color: #b1b0ae;
   font-family: Geist, sans-serif;
 }
@@ -835,7 +838,7 @@ dialog:hover > .close {
   align-items: center;
   justify-content: space-between;
   padding: 20px;
-  border-bottom: 1px solid #282828;
+  border-bottom: 1px solid var(--modal-border);
 }
 
 .import-header h2 {
@@ -1197,7 +1200,8 @@ dialog:hover > .close {
 .delete-dialog {
   width: min(400px, calc(100% - 32px));
   padding: 0;
-  background: #111;
+  background: var(--modal-fill);
+  border: 1px solid var(--modal-border);
   color: #b1b0ae;
   font-family: Geist, sans-serif;
 }
@@ -1367,7 +1371,8 @@ dialog,
 .board-dialog {
   width: min(400px, calc(100% - 32px));
   padding: 0;
-  background: #111;
+  background: var(--modal-fill);
+  border: 1px solid var(--modal-border);
   color: #b1b0ae;
   font-family: Geist, sans-serif;
 }
@@ -1404,8 +1409,8 @@ dialog,
   max-width: none;
   max-height: 75dvh;
   padding: 0;
-  background: #1a1a1a;
-  border: 1px solid #282828;
+  background: var(--modal-fill);
+  border: 1px solid var(--modal-border);
   border-radius: 24px;
   transform: translateY(24px);
 }
