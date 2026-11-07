@@ -12,7 +12,7 @@ python3 -m venv .venv
 npm start
 ```
 
-Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 18 tests covering accounts, private media access, persistence, provider behavior, and image processing.
+Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 20 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
 
 ## Accounts and existing data
 
@@ -33,7 +33,7 @@ Copy `.env.example` to `.env`, fill in the matching client IDs and secrets, and 
 
 ## Images and masonry
 
-Uploads and X imports are decoded and orientation-corrected on the backend. Each record stores `width`, `height`, `url`, and `thumbnail_url` (plus the legacy `image` alias). Original images are preserved at full resolution in orientation-normalized PNGs; WebP thumbnails are bounded by 720 × 1800 pixels without cropping. Legacy records are backfilled automatically at startup. Back up the entire `data/` directory before moving machines or deploying.
+Uploads and X imports are decoded and orientation-corrected on the backend. Each record stores `width`, `height`, `url`, and `thumbnail_url` (plus the legacy `image` alias). Original images are preserved at full resolution in orientation-normalized PNGs; new WebP thumbnails are bounded by 640 × 1600 pixels without cropping. Existing thumbnails retain their saved size. Private media is browser-cached with session-cookie variation. Legacy records are backfilled automatically at startup. Back up the entire `data/` directory before moving machines or deploying.
 
 The frontend reserves image space with stored CSS aspect ratios and positions cards in the shortest equal-width column. Columns: 1 below 701px, 3 through 1100px, 4 on desktop, and 5 above 1799px. Images below the first visible group lazy-load, with a grey ratio-matched skeleton. Only thumbnails are used in the grid; full-resolution images load when opening the lightbox. Tall images cap their preview box at approximately 2.5 times the width, remain uncropped, and offer a full-image view.
 

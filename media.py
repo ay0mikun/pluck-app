@@ -27,9 +27,9 @@ def prepare_image(raw):
                 thumbnail = oriented.convert(
                     "RGBA" if "A" in oriented.getbands() else "RGB"
                 )
-                thumbnail.thumbnail((720, 1800), Image.Resampling.LANCZOS)
+                thumbnail.thumbnail((640, 1600), Image.Resampling.LANCZOS)
                 preview = io.BytesIO()
-                thumbnail.save(preview, "WEBP", quality=84, method=4)
+                thumbnail.save(preview, "WEBP", quality=80, method=4)
                 return width, height, full.getvalue(), preview.getvalue()
     except (
         UnidentifiedImageError,

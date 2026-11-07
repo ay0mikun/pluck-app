@@ -351,14 +351,15 @@ class Handler(BaseHTTPRequestHandler):
                         (user["id"],),
                     )
                 ]
+                memberships = {}
+                for row in con.execute(
+                    "SELECT board_designs.design_id,board_designs.board_id FROM board_designs "
+                    "JOIN designs ON designs.id=board_designs.design_id WHERE designs.owner_id=?",
+                    (user["id"],),
+                ):
+                    memberships.setdefault(row["design_id"], []).append(row["board_id"])
                 for design in designs:
-                    design["boards"] = [
-                        r["board_id"]
-                        for r in con.execute(
-                            "SELECT board_id FROM board_designs WHERE design_id=?",
-                            (design["id"],),
-                        )
-                    ]
+                    design["boards"] = memberships.get(design["id"], [])
             return self.respond(
                 200, {"boards": boards, "designs": designs, "user": user}
             )
@@ -391,6 +392,14 @@ class Handler(BaseHTTPRequestHandler):
                     ).fetchone()
                 ):
                     return self.respond(404, {"error": "Not found."})
+            etag = '"' + path.rsplit("/", 1)[-1] + '"'
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(304)
+                self.send_header("Cache-Control", "private, max-age=86400, immutable")
+                self.send_header("Vary", "Cookie")
+                self.send_header("ETag", etag)
+                self.end_headers()
+                return
         try:
             body = object_store.read(DATA, path) if private_media else file.read_bytes()
         except (FileNotFoundError, AttributeError, IsADirectoryError):
@@ -425,6 +434,10 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
+        if private_media:
+            self.send_header("Cache-Control", "private, max-age=86400, immutable")
+            self.send_header("Vary", "Cookie")
+            self.send_header("ETag", etag)
         self.end_headers()
         self.wfile.write(body)
 

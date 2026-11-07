@@ -135,11 +135,24 @@ class API(unittest.TestCase):
             headers={"Cookie": self.cookie},
         )
         with urlopen(req) as res:
+            etag = res.headers["ETag"]
+            self.assertEqual(res.headers["Vary"], "Cookie")
+            self.assertIn("private", res.headers["Cache-Control"])
             thumb = Image.open(io.BytesIO(res.read()))
             self.assertLessEqual(thumb.width, 720)
             self.assertAlmostEqual(
                 thumb.width / thumb.height, item["width"] / item["height"], places=2
             )
+        cached = Request(req.full_url, headers={"Cookie": self.cookie, "If-None-Match": etag})
+        with self.assertRaises(HTTPError) as unchanged:
+            urlopen(cached)
+        self.assertEqual(unchanged.exception.code, 304)
+        unchanged.exception.close()
+        # A cached media validator cannot bypass account ownership.
+        with self.assertRaises(HTTPError) as unauthorized:
+            urlopen(Request(req.full_url, headers={"If-None-Match": etag}))
+        self.assertEqual(unauthorized.exception.code, 404)
+        unauthorized.exception.close()
         self.call("api/boards/" + board["id"], "PATCH", {"name": "Renamed"})
         self.call("api/boards/" + board["id"], "DELETE", {})
         item = next(

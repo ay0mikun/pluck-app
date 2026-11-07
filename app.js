@@ -16,6 +16,13 @@ let currentScreen = null,
   galleryFrame,
   toastTimer;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+const visitKey = "pluck-visited";
+function hasVisited() {
+  try { return localStorage.getItem(visitKey) === "1"; } catch { return false; }
+}
+function rememberVisit() {
+  try { localStorage.setItem(visitKey, "1"); } catch { /* Storage may be disabled. */ }
+}
 let wheelFrame = 0;
 let wheelTarget = 0;
 
@@ -90,6 +97,7 @@ function toast(message) {
   toastTimer = setTimeout(() => node.hidePopover(), 4000);
 }
 function showScreen(id) {
+  document.documentElement.classList.remove("app-starting");
   const previous = currentScreen;
   if (previous !== id) stopWheelScroll();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = s.id !== id));
@@ -114,24 +122,27 @@ function showScreen(id) {
 }
 async function route() {
   const hash = location.hash;
-  if (hash === "#auth") return showScreen("auth-screen");
-  if (hash.startsWith("#library")) {
-    if (!user) {
-      location.hash = "auth";
-      return;
-    }
+  if (new URLSearchParams(hash.slice(1)).has("email-token")) {
+    location.reload();
+    return;
+  }
+  if (user) {
+    rememberVisit();
+    if (hash !== "#library") history.replaceState(null, "", "/#library");
+    showScreen("workspace");
     try {
       await refresh();
-      showScreen("workspace");
-      if (sessionStorage.getItem("pluck-add-first-design")) {
-        sessionStorage.removeItem("pluck-add-first-design");
-        openImportDialog();
-      }
     } catch (e) {
       toast(e.message);
     }
     return;
   }
+  if (hash === "#auth" || hash.startsWith("#library") || hasVisited()) {
+    rememberVisit();
+    history.replaceState(null, "", "/#auth");
+    return showScreen("auth-screen");
+  }
+  rememberVisit();
   showScreen("landing");
 }
 window.addEventListener("hashchange", route);
@@ -520,8 +531,12 @@ function openImportDialog() {
 $("#paste-link").onclick = $("#empty-add").onclick = openImportDialog;
 document.querySelectorAll("[data-add-design]").forEach((button) => {
   button.onclick = () => {
-    sessionStorage.setItem("pluck-add-first-design", "1");
-    location.hash = user ? "library" : "auth";
+    if (user) {
+      location.hash = "library";
+      openImportDialog();
+    } else {
+      location.hash = "auth";
+    }
   };
 });
 importUrl.oninput = () => {
@@ -955,8 +970,8 @@ async function init() {
       history.replaceState(null, "", "/#auth");
     }
   } catch {
-    toast("Backend unavailable. Start the app with npm start, then refresh.");
-    showScreen("landing");
+    showScreen("auth-screen");
+    $("#auth-status").textContent = "Could not connect to Pluck. Please try again shortly.";
   }
 }
 init();
