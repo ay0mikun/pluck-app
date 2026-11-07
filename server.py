@@ -19,7 +19,7 @@ import database
 import object_store
 import email_login
 import oauth
-from auth import session_user
+from auth import session_user, renew_session
 from media import prepare_image, prepare_preview
 
 ROOT = Path(__file__).resolve().parent
@@ -323,10 +323,12 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(urlparse(self.path).query)
             with db() as con:
                 attempt = oauth.consume(con, provider, self, query)
-            subject, email = oauth.profile(provider, self, attempt, query.get("code", [""])[0])
-            with db() as con:
+            subject, email, account = oauth.profile(provider, self, attempt, query.get("code", [""])[0])
+            with object_store.batch(), db() as con:
+                if provider == "x":
+                    account["avatar_url"] = fetch_avatar(account["avatar_url"])
                 con.execute("BEGIN IMMEDIATE")
-                cookie = oauth.sign_in(con, provider, subject, email, attempt["user_id"])
+                cookie = oauth.sign_in(con, provider, subject, email, attempt["user_id"], account)
             return self.oauth_redirect("/#library", cookie)
         except ValueError as error:
             message = str(error)
@@ -344,7 +346,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/auth/me":
             with db() as con:
                 user = session_user(self.headers, con)
-            return self.respond(200, {"user": user})
+                cookie = renew_session(self.headers, con) if user else None
+            if cookie and os.environ.get("APP_ORIGIN", "").startswith("https://"):
+                cookie += "; Secure"
+            return self.respond(200, {"user": user}, cookie)
         if path == "/api/state":
             with db() as con:
                 user = session_user(self.headers, con)
@@ -406,10 +411,10 @@ class Handler(BaseHTTPRequestHandler):
                     ).fetchone()
                 if (
                     not user
-                    or not (design if preview else con.execute(
+                    or not (design if preview else (path == user.get("avatar_url") or con.execute(
                         "SELECT 1 FROM designs WHERE owner_id=? AND (image=? OR url=? OR thumbnail_url=? OR creator_avatar_url=?)",
                         (user["id"], path, path, path, path),
-                    ).fetchone())
+                    ).fetchone()))
                 ):
                     return self.respond(404, {"error": "Not found."})
             etag = '"' + path.rsplit("/", 1)[-1] + '"'

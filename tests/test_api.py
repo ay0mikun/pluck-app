@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import io
 import json
 import os
@@ -18,6 +19,7 @@ from urllib.request import Request, urlopen
 from PIL import Image
 
 from email_login import digest
+import oauth
 
 
 class API(unittest.TestCase):
@@ -101,6 +103,46 @@ class API(unittest.TestCase):
         except HTTPError as e:
             with e:
                 return e.code, json.load(e)
+
+    def test_returning_session_renews_without_email(self):
+        cookie = self.sign_in("persistent@example.test")
+        token = cookie.split("=", 1)[1]
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        path = Path(self.temp.name) / "moodboard.sqlite3"
+        with closing(sqlite3.connect(path)) as con, con:
+            con.execute("UPDATE sessions SET expires=? WHERE token=?", (time.time() + 60, token_hash))
+        req = Request("http://127.0.0.1:5199/api/auth/me", headers={"Cookie": cookie})
+        with urlopen(req) as response:
+            self.assertEqual(json.load(response)["user"]["email"], "persistent@example.test")
+            self.assertIn("Max-Age=7776000", response.headers["Set-Cookie"])
+            self.assertIn("HttpOnly", response.headers["Set-Cookie"])
+        with closing(sqlite3.connect(path)) as con, con:
+            expires = con.execute("SELECT expires FROM sessions WHERE token=?", (token_hash,)).fetchone()[0]
+            self.assertGreater(expires, time.time() + 89 * 86400)
+            con.execute("UPDATE sessions SET expires=? WHERE token=?", (time.time() - 1, token_hash))
+        with urlopen(req) as response:
+            self.assertIsNone(json.load(response)["user"])
+            self.assertIsNone(response.headers.get("Set-Cookie"))
+
+    def test_provider_profile_persists_and_updates(self):
+        with closing(sqlite3.connect(Path(self.temp.name) / "moodboard.sqlite3")) as con, con:
+            con.row_factory = sqlite3.Row
+            cookie = oauth.sign_in(con, "x", "profile-test", "", None, {
+                "display_name": "Test Designer", "username": "testdesigner", "avatar_url": "/avatars/" + "a" * 32 + ".webp",
+            })
+        req = Request("http://127.0.0.1:5199/api/auth/me", headers={"Cookie": cookie.split(";", 1)[0]})
+        with urlopen(req) as response:
+            user = json.load(response)["user"]
+        self.assertEqual(user["display_name"], "Test Designer")
+        self.assertEqual(user["username"], "testdesigner")
+        self.assertTrue(user["avatar_url"].startswith("/avatars/"))
+        with closing(sqlite3.connect(Path(self.temp.name) / "moodboard.sqlite3")) as con, con:
+            con.row_factory = sqlite3.Row
+            oauth.sign_in(con, "x", "profile-test", "", None, {
+                "display_name": "Updated Designer", "username": "testdesigner", "avatar_url": "",
+            })
+        with urlopen(req) as response:
+            self.assertEqual(json.load(response)["user"]["display_name"], "Updated Designer")
 
     def test_workflow_and_persistence(self):
         _, board = self.call("api/boards", "POST", {"name": "Mobile UI"})
