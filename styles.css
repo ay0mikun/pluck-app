@@ -452,21 +452,6 @@ textarea {
   isolation: isolate;
 }
 
-.filters::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  z-index: -1;
-  width: var(--filter-width, 0px);
-  height: 32px;
-  border-radius: 12px;
-  background: #1f1f1f;
-  transform: translate(var(--filter-x, 0px), -50%);
-  transition: transform 320ms var(--ease-out), width 320ms var(--ease-out);
-  pointer-events: none;
-}
-
 .filter {
   flex: none;
   display: inline-flex;
@@ -485,7 +470,6 @@ textarea {
   transition: background-color 150ms ease, color 150ms ease;
 }
 
-.filters::after,
 .board-picker-panel::after {
   content: "";
   position: absolute;
@@ -501,15 +485,18 @@ textarea {
   transition: transform 280ms var(--ease-out), width 280ms var(--ease-out),
     height 280ms var(--ease-out), opacity 120ms ease;
 }
-.filters[data-hover-fill="visible"]::after,
 .board-picker-panel[data-hover-fill="visible"]::after { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
-  .filters::after,
   .board-picker-panel::after { transition: none; }
 }
 
 .filter.active {
+  background: #1f1f1f;
   color: #fefefe;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .filter:not(.active):hover { background: #171717; }
 }
 
 .filter[data-board=""] {

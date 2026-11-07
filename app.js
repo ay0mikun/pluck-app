@@ -395,18 +395,6 @@ function followHover(container, selector) {
   return hide;
 }
 
-const clearFilterHover = followHover(filters, ".filter");
-
-function positionFilterHighlight() {
-  const active = filters.querySelector(".filter.active");
-  if (!active || !active.offsetWidth) return;
-  filters.style.setProperty("--filter-x", `${active.offsetLeft}px`);
-  filters.style.setProperty("--filter-width", `${active.offsetWidth}px`);
-}
-
-new ResizeObserver(positionFilterHighlight).observe(filters);
-document.fonts.ready.then(positionFilterHighlight);
-
 function render() {
   const boardCounts = new Map();
   for (const design of state.designs) {
@@ -415,7 +403,6 @@ function render() {
     }
   }
   const scrollLeft = filters.scrollLeft;
-  clearFilterHover();
   filters.innerHTML = [{ id: "", name: "All" }, ...state.boards]
     .map(({ id, name }) => {
       const active = id === (selectedBoard || "");
@@ -425,7 +412,6 @@ function render() {
     .join("");
   filters.insertAdjacentHTML("beforeend", '<button id="new-board" class="filter add-board" type="button" aria-label="Create new board">+</button>');
   filters.scrollTo({ left: scrollLeft, behavior: "instant" });
-  positionFilterHighlight();
   const designs = state.designs.filter(
     (design) => !selectedBoard || design.boards.includes(selectedBoard),
   );
