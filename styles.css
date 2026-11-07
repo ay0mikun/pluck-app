@@ -1379,6 +1379,10 @@ dialog,
 }
 #board-form .form-status:empty { display: none; }
 #board-form .primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   height: 34px;
   min-height: 0;
   border: 0;

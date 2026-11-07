@@ -199,13 +199,20 @@ for (const dialog of document.querySelectorAll("dialog")) {
       closeDialog(dialog);
   });
 }
-async function submitting(form, action, message = "Saving…") {
+async function submitting(form, action) {
   const button = form.querySelector("[type=submit]"),
     status = form.querySelector(".form-status");
   const dialog = form.closest("dialog");
+  const label = button.querySelector("span");
+  const loader = button.querySelector("img");
+  const input = form.elements.name;
   button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  label.textContent = "Creating board";
+  loader.hidden = false;
+  input.readOnly = true;
   if (dialog) dialog.dataset.busy = "true";
-  if (status) status.textContent = message;
+  if (status) status.textContent = "";
   try {
     await action();
     if (status) status.textContent = "";
@@ -214,6 +221,10 @@ async function submitting(form, action, message = "Saving…") {
     else toast(e.message);
   } finally {
     button.disabled = false;
+    button.removeAttribute("aria-busy");
+    label.textContent = "Create board";
+    loader.hidden = true;
+    input.readOnly = false;
     if (dialog) delete dialog.dataset.busy;
   }
 }
