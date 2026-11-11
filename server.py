@@ -455,16 +455,6 @@ class Handler(BaseHTTPRequestHandler):
             ".ttf": "font/ttf",
             ".woff2": "font/woff2",
         }
-        if file == ROOT / "index.html" and os.environ.get("PLUCK_STAGING") == "1":
-            body = body.replace(b'class="screen landing"', b'class="screen landing landing-stage"')
-            body = body.replace(b"data-coming-soon", b"data-add-design")
-            body = body.replace(b"Coming soon", b"Add my first design")
-            body = body.replace(
-                b'Add my first design\n          </button>',
-                b'<span class="launch-x"><img src="assets/workspace-x.svg" width="11.5" height="11.5" alt="" /></span>Paste X link\n          </button>',
-                1,
-            )
-            body = body.replace(b"to sort into boards.", b"to sort into moodboards.")
         self.send_response(200)
         self.send_header(
             "Content-Type", types.get(Path(path).suffix if private_media else file.suffix, "application/octet-stream")
@@ -561,6 +551,12 @@ class Handler(BaseHTTPRequestHandler):
                     ).fetchone():
                         return self.respond(404, {"error": "Board not found."})
                     if method == "DELETE":
+                        removed = [row["id"] for row in con.execute(
+                            "SELECT d.id FROM designs d JOIN board_designs bd ON bd.design_id=d.id "
+                            "WHERE bd.board_id=? AND d.owner_id=?", (match[1], owner)
+                        )]
+                        con.executemany("DELETE FROM designs WHERE id=? AND owner_id=?",
+                                        [(identifier, owner) for identifier in removed])
                         con.execute("DELETE FROM boards WHERE id=?", (match[1],))
                     else:
                         name = clean(body.get("name"), 81)
@@ -572,8 +568,20 @@ class Handler(BaseHTTPRequestHandler):
                             "UPDATE boards SET name=? WHERE id=?", (name, match[1])
                         )
                     con.commit()
+                    if method == "DELETE":
+                        for identifier in removed:
+                            for directory, extension in (("uploads", "png"), ("thumbnails", "webp"), ("previews", "webp")):
+                                try:
+                                    object_store.delete(DATA, f"/{directory}/{identifier}.{extension}")
+                                except OSError:
+                                    self.log_error("Could not remove deleted board media")
                     return self.respond(200, {"ok": True})
                 if path == "/api/import" and method == "POST":
+                    board_id = body.get("board_id")
+                    if not isinstance(board_id, str) or not con.execute(
+                        "SELECT 1 FROM boards WHERE id=? AND owner_id=?", (board_id, owner)
+                    ).fetchone():
+                        raise ValueError("Select a board!")
                     token = os.environ.get("X_BEARER_TOKEN")
                     source = clean(body.get("url"), 2000)
                     parsed = urlparse(source)
@@ -594,6 +602,9 @@ class Handler(BaseHTTPRequestHandler):
                         )
                     ]
                     if existing:
+                        for identifier in existing:
+                            con.execute("INSERT INTO board_designs(board_id,design_id) VALUES(?,?) "
+                                        "ON CONFLICT DO NOTHING", (board_id, identifier))
                         missing_avatar = con.execute(
                             "SELECT 1 FROM designs WHERE source=? AND owner_id=? "
                             "AND (creator_avatar_url IS NULL OR creator_avatar_url='')",
@@ -611,6 +622,7 @@ class Handler(BaseHTTPRequestHandler):
                                     "AND (creator_avatar_url IS NULL OR creator_avatar_url='')",
                                     (avatar_url, source, owner),
                                 )
+                        con.commit()
                         return self.respond(200, {"ids": existing, "existing": True})
                     title, creator, photos, avatar = fetch_post(match[1], token)
                     avatar_url = fetch_avatar(avatar)
@@ -636,6 +648,8 @@ class Handler(BaseHTTPRequestHandler):
                             ),
                         )
                         identifiers.append(identifier)
+                        con.execute("INSERT INTO board_designs(board_id,design_id) VALUES(?,?)",
+                                    (board_id, identifier))
                     con.commit()
                     return self.respond(201, {"ids": identifiers})
                 if path == "/api/designs" and method == "POST":
@@ -782,7 +796,7 @@ def load_local_env(path):
     if not path.is_file():
         return
     allowed = {
-        "PORT", "HOST", "APP_ORIGIN", "PLUCK_STAGING", "X_BEARER_TOKEN",
+        "PORT", "HOST", "APP_ORIGIN", "X_BEARER_TOKEN",
         "DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_STORAGE_BUCKET", "RESEND_API_KEY", "EMAIL_FROM",
         "LOCAL_EMAIL_PREVIEW", "LOCAL_FILLED_LIBRARY",

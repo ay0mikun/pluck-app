@@ -488,7 +488,7 @@ textarea {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .filter:not(.active):hover { background: #171717; }
+  .filter:not(.active):hover { color: #fefefe; }
 }
 
 .filter[data-board=""] {
@@ -684,13 +684,6 @@ textarea {
   font: 400 14px/18px Geist, sans-serif;
   letter-spacing: -.21px;
   box-shadow: 0 12px 16px -4px #00000014, 0 4px 6px -2px #00000008;
-}
-.account-menu h2,
-.account-drawer h2 {
-  padding: 12px 16px;
-  font: 500 14px/18px Geist, sans-serif;
-  color: #fefefe;
-  border-bottom: 1px solid #282828;
 }
 .account-options,
 .account-footer { padding: 6px; }
@@ -1420,18 +1413,12 @@ dialog,
   color: #b1b0ae;
   font: 400 16px/normal Geist, sans-serif;
 }
-.account-drawer h2 {
-  padding: 20px 56px 20px 16px;
-  font-size: 16px;
-  font-weight: 450;
-  line-height: 21px;
-}
 .account-drawer .account-options { display: grid; gap: 4px; }
 .account-drawer .menu-button { height: 40px; }
 .account-drawer .account-footer { padding: 16px; border: 0; }
 .account-drawer #logout { justify-content: center; gap: 6px; font-size: 14px; }
 @starting-style {
-  .board-drawer[open] { transform: translateY(24px); }
+  .board-drawer[open] { transform: translateY(12px); }
 }
 
 @media (max-width: 999px) {
@@ -1521,4 +1508,50 @@ dialog,
   :is(.import-dialog, .board-dialog, .delete-dialog).closing {
     transform: none;
   }
+}
+
+/* App board flows share the existing modal, field and drawer primitives. */
+.workspace-nav > a img { width: 112.877px; height: 34px; }
+#item-count span { color: #fefefe; }
+#edit-board { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: #b1b0ae; font: 400 14px Geist, sans-serif; white-space: nowrap; transition: color 150ms ease; }
+#edit-board[hidden] { display: none; }
+#edit-board:hover { color: #fefefe; }
+#edit-board:hover img { filter: brightness(1.5); }
+.filter.active .filter-count { color: #fefefe; }
+.import-dialog { overflow: visible; }
+#import-board-picker summary { height: 36px; padding: 4px 10px; border: 1px solid transparent; color: #fefefe; font: 400 15px Geist, sans-serif; letter-spacing: -.225px; }
+#import-board-picker[open] summary { border-color: #fefefe; }
+#import-board-picker .board-picker-panel { position: absolute; top: 100%; right: 0; z-index: 2; }
+#import-board-picker summary span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#import-board-error, #edit-board-error { color: #ff7300; margin-top: 6px; font-size: 14px; }
+#edit-board-form { padding: 20px; display: grid; gap: 20px; }
+.edit-board-actions { display: flex; gap: 12px; }
+.edit-board-actions .button { flex: 1; height: 34px; border: 0; border-radius: 12px; }
+.edit-board-actions .secondary { background: #1f1f1f; color: #fefefe; }
+.edit-board-actions .primary { background: #fefefe; color: #0e0e0e; font-weight: 500; }
+.edit-board-actions .primary:disabled { background: #b8b8b8; color: #555; opacity: 1; }
+.edit-board-actions .primary:hover:not(:disabled) { background: #eaeaea; }
+.board-danger { padding: 20px; border-top: 1px solid #282828; display: grid; gap: 8px; font-size: 15px; letter-spacing: -.15px; }
+#delete-board { width: 100%; height: 34px; border: 0; border-radius: 12px; background: #ff383c24; color: #ff383c; font-weight: 500; }
+.board-danger p:last-child { color: #6e6e6e; }
+.source-post { color: #fefefe; gap: 6px; padding: 4px 16px; text-decoration: none; }
+.source-post img { flex: none; }
+.account-menu .account-footer { border-top: 0; }
+#account-menu #logout { flex-direction: row-reverse; justify-content: flex-end; }
+.account-drawer .account-footer { border-top: 0; }
+.account-menu { border-radius: 18px; }
+#toast { display: none; align-items: center; gap: 10px; background: #131313; border: 1px solid #1e1e1e; padding: 11px 12px; font-size: 14px; width: 361px; box-shadow: 0 0 8px #0004; }
+#toast:popover-open { display: flex; }
+#toast img { flex: none; }
+@media (max-width: 700px) {
+  .edit-board-actions .button, #delete-board { height: 40px; }
+  .gallery-meta { gap: 12px; }
+  #item-count { font-size: 16px; }
+  .detail-image-slot { border-radius: 6px; }
+  .board-drawer .board-picker-panel { background: transparent; }
+}
+
+.board-create img { flex: none; }
+@media (max-width: 700px) {
+  #edit-board-dialog .import-header { padding: 20px 16px; }
 }

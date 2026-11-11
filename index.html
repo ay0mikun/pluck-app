@@ -93,7 +93,7 @@
     >
       <header class="navigation workspace-nav">
         <a href="#library" aria-label="All designs"
-          ><img src="assets/workspace-logo.svg" width="40" height="40" alt=""
+          ><img src="assets/workspace-brand.svg?v=2" width="112.877" height="34" alt=""
         /></a>
         <nav>
           <button class="button primary" id="paste-link">
@@ -110,8 +110,7 @@
           </button>
         </nav>
       </header>
-      <div id="account-menu" class="account-menu" popover aria-labelledby="account-menu-title">
-        <h2 id="account-menu-title">Account menu</h2>
+      <div id="account-menu" class="account-menu" popover aria-label="Account menu">
         <div class="account-options">
           <button id="upload-design" class="menu-button account-upload" type="button" disabled>
             <span>Upload image</span><span class="coming-soon-badge">coming soon</span>
@@ -122,11 +121,12 @@
           <button id="logout" class="menu-button" type="button"><img src="assets/account-logout.svg" width="16" height="16" alt="" />Log out</button>
         </div>
       </div>
-      <dialog id="account-drawer" class="board-drawer account-drawer" aria-labelledby="account-menu-title"></dialog>
+      <dialog id="account-drawer" class="board-drawer account-drawer" aria-label="Account menu"></dialog>
       <nav id="filters" class="filters" aria-label="Boards"></nav>
       <main class="gallery-content">
         <div class="gallery-meta">
           <p id="item-count"></p>
+          <button id="edit-board" type="button" hidden><img src="assets/board-edit.svg" width="16" height="16" alt="" />Edit board</button>
         </div>
         <div
           id="design-grid"
@@ -162,10 +162,21 @@
           </div>
           <p id="import-error" role="alert" hidden></p>
         </div>
+        <div class="input-field import-board-field">
+          <label id="import-board-label">Save to a board</label>
+          <details id="import-board-picker" class="board-picker">
+            <summary class="preview-control" aria-labelledby="import-board-label import-board-name"><span id="import-board-name">Select board</span><img src="assets/preview-chevron.svg" width="16" height="16" alt="" /></summary>
+            <div class="board-picker-panel">
+              <div class="board-options" role="group" aria-label="Save to a board"></div>
+              <div class="board-picker-footer"><button class="board-create" type="button"><img src="assets/board-add.svg" width="16" height="16" alt="" />Create new board</button></div>
+            </div>
+          </details>
+          <p id="import-board-error" role="alert" hidden>Select a board!</p>
+        </div>
         <div class="import-actions">
           <button type="submit" class="button primary" data-muted>
             <img class="auth-loader" src="assets/login-loader.svg" alt="" hidden />
-            <span class="button-label">Fetch designs</span>
+            <span class="button-label">Save designs</span>
           </button>
           <p class="form-status" id="import-status" role="status"></p>
         </div>
@@ -195,6 +206,15 @@
         </button>
         <p class="form-status" role="status"></p>
       </form>
+    </dialog>
+    <dialog id="edit-board-dialog" class="board-dialog" aria-labelledby="edit-board-title">
+      <header class="import-header"><h2 id="edit-board-title">Edit board</h2><button class="close" type="button" aria-label="Close edit board" autofocus><img src="assets/import-close.svg" alt="" /></button></header>
+      <form id="edit-board-form" novalidate>
+        <div class="input-field"><label for="edit-board-name">Board name</label><div class="input-shell"><input id="edit-board-name" name="name" autocomplete="off" spellcheck="false" aria-describedby="edit-board-count edit-board-error" required /><span class="input-count" id="edit-board-count"></span></div><p id="edit-board-error" role="alert" hidden></p></div>
+        <div class="edit-board-actions"><button class="button secondary" id="cancel-edit-board" type="button">Cancel</button><button class="button primary" type="submit" disabled><img class="auth-loader" src="assets/login-loader.svg" width="16" height="16" alt="" hidden /><span>Save</span></button></div>
+        <p class="form-status" role="status"></p>
+      </form>
+      <div class="board-danger"><p>Danger zone</p><button id="delete-board" class="button" type="button">Delete board</button><p>Deleting this board also removes the designs saved in it. This can’t be undone.</p></div>
     </dialog>
     <dialog
       id="detail-dialog"
