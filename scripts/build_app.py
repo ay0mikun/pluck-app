@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_FILES = ("index.html", "app.js", "styles.css", "fonts.css")
+PUBLIC_FILES = ("index.html", "app.js", "styles.css", "fonts.css", "manifest.webmanifest")
 
 
 def build(destination, api_origin):

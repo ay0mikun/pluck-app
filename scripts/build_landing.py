@@ -18,7 +18,7 @@ def build(destination):
     title = "Pluck"
     description = "Your UI inspiration, organized"
     site_url = "https://pluck-app-three.vercel.app/"
-    preview = f"{site_url}assets/pluck-preview.png"
+    preview = f"{site_url}assets/pluck-social-card.png"
     html = f"""<!doctype html>
 <html lang="en">
 <head>
