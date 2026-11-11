@@ -7,6 +7,8 @@ import os
 import re
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -30,6 +32,7 @@ AVATARS = DATA / "avatars"
 MAX_IMAGE = 10 * 1024 * 1024
 # Product rule; Figma sample counters do not override this limit.
 BOARD_NAME_LIMIT = 15
+_downloads = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pluck-download")
 
 
 def db():
@@ -39,9 +42,11 @@ def db():
 def store_image(identifier, raw):
     width, height, full, thumbnail = prepare_image(raw)
     with object_store.batch():
-        object_store.write(DATA, f"/uploads/{identifier}.png", full)
-        object_store.write(DATA, f"/thumbnails/{identifier}.webp", thumbnail)
-        object_store.write(DATA, f"/previews/{identifier}.webp", prepare_preview(full))
+        object_store.write_many(DATA, [
+            (f"/uploads/{identifier}.png", full),
+            (f"/thumbnails/{identifier}.webp", thumbnail),
+            (f"/previews/{identifier}.webp", prepare_preview(full)),
+        ])
     return width, height, f"/uploads/{identifier}.png", f"/thumbnails/{identifier}.webp"
 
 
@@ -85,6 +90,22 @@ def clean(value, limit=200):
     if not isinstance(value, str) or len(value) > limit:
         raise ValueError("A text field is invalid or too long.")
     return value.strip()
+
+
+def imported_designs(con, identifiers, owner):
+    """Return saved cards without making the browser reload the entire library."""
+    marks = ",".join("?" for _ in identifiers)
+    designs = [dict(row) for row in con.execute(
+        f"SELECT * FROM designs WHERE owner_id=? AND id IN ({marks})", (owner, *identifiers)
+    )]
+    memberships = {}
+    for row in con.execute(f"SELECT design_id,board_id FROM board_designs WHERE design_id IN ({marks})", identifiers):
+        memberships.setdefault(row["design_id"], []).append(row["board_id"])
+    for design in designs:
+        design["boards"] = memberships.get(design["id"], [])
+    return {"designs": designs, "media_urls": object_store.signed_urls([
+        path for design in designs for path in (design["thumbnail_url"], design["creator_avatar_url"], f"/previews/{design['id']}.webp")
+    ])}
 
 
 class ImportFailure(Exception):
@@ -244,7 +265,7 @@ def fetch_photo(url):
     return raw
 
 
-def fetch_avatar(url):
+def fetch_avatar(url, timeout=12):
     """Cache only public X profile images; a missing avatar never blocks a save."""
     if not isinstance(url, str):
         return ""
@@ -261,7 +282,7 @@ def fetch_avatar(url):
         request = Request(url, headers={"User-Agent": "Pluck/0.1", "Accept": "image/*"})
         for attempt in range(2):
             try:
-                with build_opener(NoRedirect).open(request, timeout=12) as response:
+                with build_opener(NoRedirect).open(request, timeout=timeout) as response:
                     raw = response.read(2 * 1024 * 1024 + 1)
                 break
             except (URLError, TimeoutError, ConnectionError) as error:
@@ -284,6 +305,21 @@ def fetch_avatar(url):
         return f"/avatars/{identifier}.webp"
     except (OSError, ValueError):
         return ""
+
+
+def download_post_media(photos, avatar):
+    """Bound network concurrency while keeping image encoding sequential."""
+    photos_pending = [_downloads.submit(fetch_photo, photo["url"]) for photo in photos]
+    avatar_pending = _downloads.submit(copy_context().run, fetch_avatar, avatar, timeout=4)
+    values, error = [], None
+    for future in [*photos_pending, avatar_pending]:
+        try:
+            values.append(future.result())
+        except Exception as failure:
+            error = error or failure
+    if error:
+        raise error
+    return values[:-1], values[-1]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -607,28 +643,13 @@ class Handler(BaseHTTPRequestHandler):
                         for identifier in existing:
                             con.execute("INSERT INTO board_designs(board_id,design_id) VALUES(?,?) "
                                         "ON CONFLICT DO NOTHING", (board_id, identifier))
-                        missing_avatar = con.execute(
-                            "SELECT 1 FROM designs WHERE source=? AND owner_id=? "
-                            "AND (creator_avatar_url IS NULL OR creator_avatar_url='')",
-                            (source, owner),
-                        ).fetchone()
-                        if missing_avatar:
-                            try:
-                                _, _, _, avatar = fetch_post(match[1], token)
-                                avatar_url = fetch_avatar(avatar)
-                            except ImportFailure:
-                                avatar_url = ""
-                            if avatar_url:
-                                con.execute(
-                                    "UPDATE designs SET creator_avatar_url=? WHERE source=? AND owner_id=? "
-                                    "AND (creator_avatar_url IS NULL OR creator_avatar_url='')",
-                                    (avatar_url, source, owner),
-                                )
                         con.commit()
-                        return self.respond(200, {"ids": existing, "existing": True})
+                        return self.respond(200, {"ids": existing, "existing": True, **imported_designs(con, existing, owner)})
+                    started = time.perf_counter()
                     title, creator, photos, avatar = fetch_post(match[1], token)
-                    avatar_url = fetch_avatar(avatar)
-                    staged = [fetch_photo(photo["url"]) for photo in photos]
+                    post_fetched = time.perf_counter()
+                    staged, avatar_url = download_post_media(photos, avatar)
+                    downloaded = time.perf_counter()
                     identifiers = []
                     for raw in staged:
                         identifier = uuid.uuid4().hex
@@ -653,7 +674,8 @@ class Handler(BaseHTTPRequestHandler):
                         con.execute("INSERT INTO board_designs(board_id,design_id) VALUES(?,?)",
                                     (board_id, identifier))
                     con.commit()
-                    return self.respond(201, {"ids": identifiers})
+                    print(f"X import: images={len(identifiers)} post={post_fetched-started:.2f}s downloads={downloaded-post_fetched:.2f}s processing_uploads={time.perf_counter()-downloaded:.2f}s", flush=True)
+                    return self.respond(201, {"ids": identifiers, **imported_designs(con, identifiers, owner)})
                 if path == "/api/designs" and method == "POST":
                     title = clean(body.get("title"), 200)
                     if not title:

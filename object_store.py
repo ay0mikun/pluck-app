@@ -4,12 +4,15 @@ import os
 import json
 from contextlib import contextmanager
 from contextvars import ContextVar
+from contextvars import copy_context
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 _pending = ContextVar("pending_media", default=None)
+_uploads = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pluck-storage")
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -116,6 +119,25 @@ def read(data_directory, path):
     if settings():
         return request("GET", path)
     return (Path(data_directory) / path.lstrip("/")).read_bytes()
+
+
+def write_many(data_directory, files):
+    """Upload variants concurrently, preserving the caller's rollback batch."""
+    if not settings():
+        for path, raw in files:
+            write(data_directory, path, raw)
+        return
+    futures = [_uploads.submit(copy_context().run, write, data_directory, path, raw)
+               for path, raw in files]
+    # Drain every worker before propagating failures, so rollback cannot race uploads.
+    error = None
+    for future in futures:
+        try:
+            future.result()
+        except Exception as failure:
+            error = error or failure
+    if error:
+        raise error
 
 
 def delete(data_directory, path):

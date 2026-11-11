@@ -613,7 +613,13 @@ importForm.onsubmit = async (event) => {
   try {
     const result = await api("import", "POST", {url, board_id: importBoard});
     selectedBoard = importBoard;
-    await refresh();
+    if (result.designs) {
+      const updated = new Map(result.designs.map((design) => [design.id, design]));
+      const added = result.designs.filter((design) => !state.designs.some((item) => item.id === design.id));
+      state.designs = [...added, ...state.designs.map((design) => updated.get(design.id) || design)];
+      state.media_urls = {...state.media_urls, ...result.media_urls};
+      render();
+    } else await refresh();
     importDialog.close();
     importForm.reset();
     toast(result.existing ? "Designs saved to board." : `${result.ids.length} design${result.ids.length === 1 ? "" : "s"} saved.`);

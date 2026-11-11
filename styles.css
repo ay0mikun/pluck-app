@@ -892,7 +892,6 @@ dialog:hover > .close {
   position: relative;
   width: min(100%, calc(var(--preview-image-height, 100cqh) * var(--image-ratio)));
   aspect-ratio: var(--image-ratio);
-  max-height: 80svh;
   margin: auto;
   overflow: hidden;
   border-radius: 6px;

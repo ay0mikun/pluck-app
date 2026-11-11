@@ -235,6 +235,8 @@ class API(unittest.TestCase):
             status, result = self.call("api/import", "POST", {"url": source + "?s=20", "board_id": board["id"]})
             self.assertEqual(status, 200)
             self.assertTrue(result["existing"])
+            self.assertEqual(result["designs"][0]["id"], design["id"])
+            self.assertIn(board["id"], result["designs"][0]["boards"])
         _, second = self.call("api/boards", "POST", {"name": "Shared"})
         self.call("api/designs/" + design["id"], "PATCH", {"boards": [board["id"], second["id"]]})
         item = next(d for d in self.call("api/state")[1]["designs"] if d["id"] == design["id"])

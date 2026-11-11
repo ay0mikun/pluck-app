@@ -12,7 +12,7 @@ python3 -m venv .venv
 npm start
 ```
 
-Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 27 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
+Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 29 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
 
 ## Accounts and existing data
 
@@ -123,3 +123,5 @@ Board names allow up to **15 characters**, for both creation and editing. This i
 All is a virtual parent library and cannot be edited. Custom boards can be renamed or deleted. Deleting a board permanently removes its designs from the library and every other board, and removes their stored image variants. The UI requires confirmation.
 
 X imports require a valid post link and an owned `board_id`. New and cached imports attach to that board in the same database transaction; the save button stays disabled until both fields are valid.
+
+X import downloads use a shared four-worker limit. Image variants upload concurrently with rollback tracking, while image encoding remains sequential to limit memory use. Repeat imports reuse saved images without waiting for avatar repair. The save response includes the updated cards so the frontend does not reload the whole library before showing success. Import logs report download and processing/upload times without post URLs or credentials.
