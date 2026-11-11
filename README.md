@@ -12,7 +12,7 @@ python3 -m venv .venv
 npm start
 ```
 
-Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 29 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
+Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 33 tests covering accounts, private media access and caching, persistence, provider behavior, image processing, and deployment packaging.
 
 ## Accounts and existing data
 
@@ -70,8 +70,8 @@ Pillow handles images; psycopg connects hosted Postgres. These are the only runt
 
 ## Shared staging
 
-The `staging` branch includes a free Render Blueprint in `render.yaml`. The
-public landing page continues to use the separate Vercel build.
+The `staging` branch includes a free Render Blueprint in `render.yaml`.
+The Vercel build ships only the app; the optional landing build is separate.
 
 1. Create a Supabase project. In Storage, create a **private** bucket named
    `pluck-media`. The backend rejects a public bucket.
@@ -97,8 +97,8 @@ public landing page continues to use the separate Vercel build.
 7. Test sign-in, X import, board creation, image copying and deletion. Redeploy
    and verify accounts and saved images still persist before inviting testers.
 
-Render supplies `PORT`. The Blueprint binds to `0.0.0.0`, enables the full-app
-landing buttons, and disables local mock sign-in. Render serves the application,
+Render supplies `PORT`. The Blueprint binds to `0.0.0.0`
+and disables local mock sign-in. Render serves the application,
 Supabase stores Postgres records and private media, and Resend sends email links
 over HTTPS. No Render persistent disk is needed.
 
@@ -108,6 +108,41 @@ only the relevant values into Render's environment settings.
 
 Free Render services sleep after inactivity. Supabase and Resend free tiers
 have usage limits. Resend requires a domain you control to send to other testers.
+
+## Production app
+
+The production app starts at sign-in and restores existing sessions into the
+library. The Vercel artifact excludes the landing page, Python source, local
+data, and environment files. `fonts.css` is shared with the optional standalone
+landing build; no landing script or styles are loaded by the app.
+
+1. Create a separate production Supabase project and private `pluck-media`
+   bucket. Keep its keys in the ignored `.env.production` file locally and in
+   the production Render service's environment. Do not reuse staging storage.
+2. Create a separate Render Blueprint from `main`, using
+   `render.production.yaml`. Its default free plan can be changed explicitly
+   in Render. Enter the production Supabase, Resend, and X OAuth credentials.
+   Set `APP_ORIGIN` to the production **Vercel** HTTPS origin.
+3. In the Vercel project connected to `main`, set `PLUCK_API_ORIGIN` in the
+   **Production** environment to the new Render service's HTTPS origin, with
+   no path. This is a public backend address, not a secret. Vercel runs
+   `python3 scripts/build_app.py .vercel/output` using the Build Output API.
+   Remove dashboard build/output overrides left over from the landing build.
+4. Register `https://YOUR-APP.vercel.app/api/auth/x/callback` in the X developer
+   console. Use the same Vercel origin for `APP_ORIGIN` so email links return
+   to the app. Keep the staging callback registered as well.
+5. Vercel proxies `/api/`, `/uploads/`, `/thumbnails/`, `/avatars/`, and
+   `/previews/` to Render. Cookies stay HttpOnly, Secure, and same-origin;
+   private responses must not be CDN-cached. Supabase signed image URLs still
+   load directly where available. No server credentials belong in Vercel's
+   static build.
+6. Verify both sign-in methods, persistence after reload, imports, boards,
+   previews, copying, and deletion before sharing the production URL.
+
+Preview deployments require their own `PLUCK_API_ORIGIN`; without it the build
+fails instead of silently connecting to production. The existing Render staging
+URL remains independent. The GitHub Pages landing workflow is manual-only;
+the future landing page can link directly to the production app URL.
 
 ## Development storage
 

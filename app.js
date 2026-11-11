@@ -110,7 +110,6 @@ function showScreen(id) {
   currentScreen = id;
   if (
     previous !== id &&
-    id !== "landing" &&
     !reducedMotion.matches &&
     !("keyboard" in document.documentElement.dataset)
   ) {

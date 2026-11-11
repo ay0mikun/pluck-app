@@ -1,15 +1,6 @@
 name: Deploy Pluck landing page
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "index.html"
-      - "landing.css"
-      - "landing.js"
-      - "assets/**"
-      - "scripts/build_landing.py"
-      - ".github/workflows/landing-pages.yml"
   workflow_dispatch:
 
 permissions:

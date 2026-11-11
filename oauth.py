@@ -58,7 +58,13 @@ def app_origin(handler):
     if not origin and host in (f"localhost:{port}", f"127.0.0.1:{port}"):
         origin = "http://" + host
     parsed = urlsplit(origin or "")
-    if parsed.netloc != host or not (
+    # Render sees its own Host when Vercel proxies a same-origin API request.
+    # Use only the platform-provided hostname, never a forwarded client header.
+    allowed_hosts = {parsed.netloc}
+    render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+    if render_host:
+        allowed_hosts.add(render_host)
+    if host not in allowed_hosts or not (
         parsed.scheme == "https"
         or (parsed.scheme == "http" and parsed.hostname in ("localhost", "127.0.0.1"))
     ) or parsed.path not in ("", "/") or parsed.query or parsed.fragment:

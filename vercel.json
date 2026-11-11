@@ -1,6 +1,5 @@
 {
   "framework": null,
   "installCommand": "",
-  "buildCommand": "python3 scripts/build_landing.py dist",
-  "outputDirectory": "dist"
+  "buildCommand": "python3 scripts/build_app.py .vercel/output"
 }

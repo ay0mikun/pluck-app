@@ -10,11 +10,11 @@ LANDING_START = '<section id="landing" class="screen landing">'
 
 
 def build(destination):
-    source = (ROOT / "index.html").read_text(encoding="utf-8")
+    source = (ROOT / "landing-section.html").read_text(encoding="utf-8")
     _, marker, remainder = source.partition(LANDING_START)
     landing, end, _ = remainder.partition("</section>")
     if not marker or not end:
-        raise ValueError("The landing section is missing from index.html.")
+        raise ValueError("The landing section is missing from landing-section.html.")
     title = "Pluck"
     description = "Your UI inspiration, organized"
     site_url = "https://pluck-app-three.vercel.app/"
@@ -42,6 +42,7 @@ def build(destination):
   <meta name="twitter:image" content="{preview}">
   <link rel="icon" href="assets/pluck-logo.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/pluck-logo.png">
+  <link rel="stylesheet" href="fonts.css">
   <link rel="stylesheet" href="landing.css">
   <script src="landing.js" defer></script>
   <style>
@@ -55,7 +56,8 @@ def build(destination):
 </html>
 """
     css = (ROOT / "landing.css").read_text(encoding="utf-8")
-    assets = set(re.findall(r'assets/[a-zA-Z0-9_.-]+', html + css))
+    fonts = (ROOT / "fonts.css").read_text(encoding="utf-8")
+    assets = set(re.findall(r'assets/[a-zA-Z0-9_.-]+', html + css + fonts))
     assets.add("assets/geist-OFL.txt")
 
     # Require an empty output directory so stale app files cannot ship.
@@ -67,6 +69,7 @@ def build(destination):
         shutil.copyfile(ROOT / asset, destination / asset)
     (destination / "index.html").write_text(html, encoding="utf-8")
     (destination / "landing.css").write_text(css, encoding="utf-8")
+    (destination / "fonts.css").write_text(fonts, encoding="utf-8")
     shutil.copyfile(ROOT / "landing.js", destination / "landing.js")
 
 

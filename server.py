@@ -429,8 +429,7 @@ class Handler(BaseHTTPRequestHandler):
             "/index.html": ROOT / "index.html",
             "/app.js": ROOT / "app.js",
             "/styles.css": ROOT / "styles.css",
-            "/landing.css": ROOT / "landing.css",
-            "/landing.js": ROOT / "landing.js",
+            "/fonts.css": ROOT / "fonts.css",
         }
         file = files.get(path)
         if path.startswith("/assets/") and "/" not in path[8:]:

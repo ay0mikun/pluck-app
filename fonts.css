@@ -1,0 +1,19 @@
+@font-face {
+  font-family: Geist;
+  src: url("assets/geist-sans.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Serif";
+  src: url("assets/geist-serif.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+/* Approximate Figma's 60% smoothing while retaining each corner's radius. */
+:where(*, *::before, *::after) {
+  corner-shape: superellipse(1.6);
+}
+
