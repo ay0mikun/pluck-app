@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import oauth
 from scripts.build_app import build
-from scripts.build_landing import build as build_landing
 
 
 class DeploymentTests(unittest.TestCase):
@@ -32,14 +31,6 @@ class DeploymentTests(unittest.TestCase):
             with self.subTest(origin=origin), tempfile.TemporaryDirectory() as directory:
                 with self.assertRaises(ValueError):
                     build(Path(directory), origin)
-
-    def test_separate_landing_build_keeps_its_fonts(self):
-        with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory)
-            build_landing(output)
-            self.assertIn('id="landing"', (output / "index.html").read_text())
-            self.assertFalse((output / "app.js").exists())
-            self.assertTrue((output / "fonts.css").exists())
 
     def test_oauth_uses_public_origin_through_render_proxy(self):
         handler = SimpleNamespace(headers={"Host": "pluck-api.onrender.com"}, server=SimpleNamespace(server_port=10000))

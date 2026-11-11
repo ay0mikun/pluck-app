@@ -26,13 +26,15 @@ class API(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
+        image = io.BytesIO()
+        Image.new("RGB", (160, 120), "#e6e8dd").save(image, "PNG")
+        cls.image_bytes = image.getvalue()
         cls.env = {
             **os.environ,
             "PORT": "5199",
             "MOODBOARD_DATA_DIR": cls.temp.name,
             "X_BEARER_TOKEN": "",
             "LOCAL_EMAIL_PREVIEW": "1",
-            "LOCAL_FILLED_LIBRARY": "0",
             "APP_ORIGIN": "http://127.0.0.1:5199",
             "DATABASE_URL": "",
             "SUPABASE_URL": "",
@@ -146,7 +148,7 @@ class API(unittest.TestCase):
 
     def test_workflow_and_persistence(self):
         _, board = self.call("api/boards", "POST", {"name": "Mobile UI"})
-        raw = (Path("assets/background.webp")).read_bytes()
+        raw = self.image_bytes
         status, design = self.call(
             "api/designs",
             "POST",
@@ -227,7 +229,7 @@ class API(unittest.TestCase):
         _, foreign = self.call("api/boards", "POST", {"name": "Private"})
         self.cookie = mine
         self.assertEqual(self.call("api/import", "POST", {"url": source, "board_id": foreign["id"]})[0], 400)
-        raw = Path("assets/background.webp").read_bytes()
+        raw = self.image_bytes
         _, design = self.call("api/designs", "POST", {"title": "Cached import", "image": base64.b64encode(raw).decode(), "source": source})
         with closing(sqlite3.connect(Path(self.temp.name) / "moodboard.sqlite3")) as con, con:
             con.execute("UPDATE designs SET creator_avatar_url='/avatars/cached.webp' WHERE id=?", (design["id"],))
@@ -297,7 +299,7 @@ class API(unittest.TestCase):
             {
                 "title": "Private",
                 "image": base64.b64encode(
-                    Path("assets/background.webp").read_bytes()
+                    self.image_bytes
                 ).decode(),
             },
         )

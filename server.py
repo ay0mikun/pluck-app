@@ -50,22 +50,6 @@ def store_image(identifier, raw):
     return width, height, f"/uploads/{identifier}.png", f"/thumbnails/{identifier}.webp"
 
 
-def seed_library_preview(con, owner):
-    if con.execute("SELECT 1 FROM designs WHERE owner_id=? LIMIT 1", (owner,)).fetchone():
-        return
-    for filename, title in (
-        ("interface.webp", "Interface design sample"),
-        ("comparison.webp", "Comparison layout sample"),
-    ):
-        identifier = uuid.uuid4().hex
-        raw = (ROOT / "fixtures" / "library" / filename).read_bytes()
-        width, height, url, thumbnail = store_image(identifier, raw)
-        con.execute(
-            "INSERT INTO designs(id,title,image,width,height,url,thumbnail_url,owner_id) VALUES(?,?,?,?,?,?,?,?)",
-            (identifier, title, url, width, height, url, thumbnail, owner),
-        )
-
-
 def backfill_images():
     with db() as con:
         for row in con.execute(
@@ -548,10 +532,6 @@ class Handler(BaseHTTPRequestHandler):
                 if path == "/api/auth/verify" and method == "POST":
                     token = clean(body.get("token"), 100)
                     user, cookie = email_login.verify(con, token)
-                    if os.environ.get("LOCAL_FILLED_LIBRARY") == "1" and email_login.local_preview_enabled(
-                        self.client_address[0], oauth.app_origin(self)
-                    ):
-                        seed_library_preview(con, user["id"])
                     con.commit()
                     if os.environ.get("APP_ORIGIN", "").startswith("https://"):
                         cookie += "; Secure"
@@ -823,7 +803,7 @@ def load_local_env(path):
         "PORT", "HOST", "APP_ORIGIN", "X_BEARER_TOKEN",
         "DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_STORAGE_BUCKET", "RESEND_API_KEY", "EMAIL_FROM",
-        "LOCAL_EMAIL_PREVIEW", "LOCAL_FILLED_LIBRARY",
+        "LOCAL_EMAIL_PREVIEW",
         "SMTP_HOST", "SMTP_PORT", "SMTP_FROM", "SMTP_USERNAME", "SMTP_PASSWORD",
         "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET",
         "X_OAUTH_CLIENT_ID", "X_OAUTH_CLIENT_SECRET",
