@@ -12,7 +12,7 @@ python3 -m venv .venv
 npm start
 ```
 
-Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 26 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
+Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 27 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
 
 ## Accounts and existing data
 
@@ -117,6 +117,8 @@ Keep hosted keys out of a local mock environment if you want to test isolated
 SQLite accounts.
 
 ## Board behavior
+
+Board names allow up to **15 characters**, for both creation and editing. This is a fixed product requirement and takes precedence over counters or limits shown in future Figma updates unless the user explicitly changes it.
 
 All is a virtual parent library and cannot be edited. Custom boards can be renamed or deleted. Deleting a board permanently removes its designs from the library and every other board, and removes their stored image variants. The UI requires confirmation.
 

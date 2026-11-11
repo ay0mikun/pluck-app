@@ -28,6 +28,8 @@ UPLOADS = DATA / "uploads"
 THUMBNAILS = DATA / "thumbnails"
 AVATARS = DATA / "avatars"
 MAX_IMAGE = 10 * 1024 * 1024
+# Product rule; Figma sample counters do not override this limit.
+BOARD_NAME_LIMIT = 15
 
 
 def db():
@@ -534,8 +536,8 @@ class Handler(BaseHTTPRequestHandler):
                     name = clean(body.get("name"), 81)
                     if not name:
                         raise ValueError("Name your board.")
-                    if len(name) > 10:
-                        raise ValueError("Name should not be more than 10 letters.")
+                    if len(name) > BOARD_NAME_LIMIT:
+                        raise ValueError(f"Name should not be more than {BOARD_NAME_LIMIT} letters.")
                     identifier = uuid.uuid4().hex
                     con.execute(
                         "INSERT INTO boards(id,name,owner_id) VALUES(?,?,?)",
@@ -562,8 +564,8 @@ class Handler(BaseHTTPRequestHandler):
                         name = clean(body.get("name"), 81)
                         if not name:
                             raise ValueError("Name your board.")
-                        if len(name) > 10:
-                            raise ValueError("Name should not be more than 10 letters.")
+                        if len(name) > BOARD_NAME_LIMIT:
+                            raise ValueError(f"Name should not be more than {BOARD_NAME_LIMIT} letters.")
                         con.execute(
                             "UPDATE boards SET name=? WHERE id=?", (name, match[1])
                         )

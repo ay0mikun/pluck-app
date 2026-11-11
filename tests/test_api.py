@@ -210,6 +210,13 @@ class API(unittest.TestCase):
         for folder, extension in (("uploads", "png"), ("thumbnails", "webp"), ("previews", "webp")):
             self.assertFalse((Path(self.temp.name) / folder / f"{design['id']}.{extension}").exists())
 
+    def test_board_name_limit_is_fifteen(self):
+        status, board = self.call("api/boards", "POST", {"name": "a" * 15})
+        self.assertEqual(status, 201)
+        self.assertEqual(self.call("api/boards", "POST", {"name": "a" * 16})[0], 400)
+        self.assertEqual(self.call("api/boards/" + board["id"], "PATCH", {"name": "b" * 15})[0], 200)
+        self.assertEqual(self.call("api/boards/" + board["id"], "PATCH", {"name": "b" * 16})[0], 400)
+
     def test_import_requires_owned_board_and_assigns_cached_designs(self):
         _, board = self.call("api/boards", "POST", {"name": "Imports"})
         source = "https://x.com/designer/status/12345678"

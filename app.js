@@ -624,7 +624,8 @@ importForm.onsubmit = async (event) => {
 const boardName = $("#board-name");
 const boardForm = $("#board-form");
 const boardSubmit = boardForm.querySelector("[type=submit]");
-const boardNameLimit = 10;
+// Product rule: keep 15 characters even when Figma examples show another limit.
+const boardNameLimit = 15;
 
 function updateBoardName(showRequired = false) {
   const length = Array.from(boardName.value).length;
@@ -673,8 +674,8 @@ const editName = $("#edit-board-name");
 let editingBoard = null;
 function updateEditBoard() {
   const length = Array.from(editName.value).length;
-  const message = length > 10 ? "Name should not be more than 10 letters" : "";
-  $("#edit-board-count").textContent = `${length}/10`;
+  const message = length > boardNameLimit ? `Name should not be more than ${boardNameLimit} letters` : "";
+  $("#edit-board-count").textContent = `${length}/${boardNameLimit}`;
   $("#edit-board-error").textContent = message;
   $("#edit-board-error").hidden = !message;
   editName.setAttribute("aria-invalid", String(Boolean(message)));
