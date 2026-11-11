@@ -409,7 +409,19 @@ textarea {
 
 #paste-link {
   height: 34px;
-  padding-left: 14px;
+  border: 0;
+  border-radius: 12px;
+  padding: 4px 16px;
+  gap: 6px;
+  background: #fefefe;
+  color: #0e0e0e;
+  font-weight: 500;
+  letter-spacing: -.21px;
+}
+#paste-link .x-icon { width: 16px; height: 16px; }
+#paste-link .x-icon img { filter: brightness(0); }
+@media (hover: hover) and (pointer: fine) {
+  #paste-link:hover { background: #eaeaea; }
 }
 
 .avatar-button {
@@ -1005,11 +1017,11 @@ dialog:hover > .close {
 .board-picker-panel {
   position: relative;
   isolation: isolate;
-  width: min(240px, 100%);
+  width: min(242px, 100%);
   margin-top: 6px;
   overflow: hidden;
   border: 1px solid #282828;
-  border-radius: 12px;
+  border-radius: 18px;
   background: #1a1a1a;
   color: #fefefe;
   font: 400 14px/18px Geist, sans-serif;
@@ -1045,7 +1057,8 @@ dialog:hover > .close {
   transition: color 150ms ease, background-color 150ms ease;
 }
 .board-options label {
-  flex-direction: row;
+  flex-direction: row-reverse;
+  justify-content: space-between;
   color: #b1b0ae;
   font: 400 14px/normal Geist, sans-serif;
 }
@@ -1055,6 +1068,7 @@ dialog:hover > .close {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Keep native checkbox semantics; show only the selected Figma checkmark. */
 .board-options input {
   appearance: none;
   flex: none;
@@ -1062,18 +1076,14 @@ dialog:hover > .close {
   height: 16px;
   margin: 0;
   padding: 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
-  border: 1px solid #d4d4d4;
-  border-radius: 50%;
   cursor: inherit;
 }
 .board-options label:has(:checked) { color: #fefefe; }
-.board-options label:has(:checked) input,
-.board-options label:hover input,
-.board-options label:focus-within input { border-color: #ff7300; }
 .board-options input:checked {
-  border-color: transparent !important;
-  background: url("/assets/preview-checked.svg") center / 16px 16px no-repeat border-box;
+  background: url("/assets/board-check.svg") center / 16px 16px no-repeat;
 }
 .board-options label:hover,
 .board-options label:focus-within,
@@ -1081,10 +1091,10 @@ dialog:hover > .close {
 .board-create:focus-visible {
   color: #fefefe;
 }
-.board-options label:has(input:focus-visible),
+.board-options label:has(input:focus-visible) { background: #242424; }
 .board-create:focus-visible { background: #212121; }
 @media (hover: hover) and (pointer: fine) {
-  .board-options label:hover,
+  .board-options label:hover { background: #242424; }
   .board-create:hover { background: #212121; }
 }
 .board-create {
@@ -1097,7 +1107,7 @@ dialog:hover > .close {
   letter-spacing: inherit;
   text-align: left;
 }
-.board-create span { width: 16px; text-align: center; font-size: 18px; }
+
 @media (min-width: 1000px) {
   .detail-dialog {
     inset: 0;

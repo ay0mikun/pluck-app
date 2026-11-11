@@ -725,7 +725,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
             <div class="board-picker-panel">
               <h3>Select board</h3>
               <div class="board-options" role="group" aria-label="Select board"></div>
-              <div class="board-picker-footer"><button type="button" class="board-create"><span aria-hidden="true">+</span>Create new board</button></div>
+              <div class="board-picker-footer"><button type="button" class="board-create"><img src="/assets/board-add.svg" width="16" height="16" alt="" />Create new board</button></div>
             </div>
           </details>
           <button id="remove-design" class="preview-control preview-icon" type="button" aria-label="Delete design">${icon("delete")}</button>
