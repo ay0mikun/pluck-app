@@ -7,6 +7,8 @@ import os
 import re
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -28,6 +30,9 @@ UPLOADS = DATA / "uploads"
 THUMBNAILS = DATA / "thumbnails"
 AVATARS = DATA / "avatars"
 MAX_IMAGE = 10 * 1024 * 1024
+# Product rule; Figma sample counters do not override this limit.
+BOARD_NAME_LIMIT = 15
+_downloads = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pluck-download")
 
 
 def db():
@@ -37,9 +42,11 @@ def db():
 def store_image(identifier, raw):
     width, height, full, thumbnail = prepare_image(raw)
     with object_store.batch():
-        object_store.write(DATA, f"/uploads/{identifier}.png", full)
-        object_store.write(DATA, f"/thumbnails/{identifier}.webp", thumbnail)
-        object_store.write(DATA, f"/previews/{identifier}.webp", prepare_preview(full))
+        object_store.write_many(DATA, [
+            (f"/uploads/{identifier}.png", full),
+            (f"/thumbnails/{identifier}.webp", thumbnail),
+            (f"/previews/{identifier}.webp", prepare_preview(full)),
+        ])
     return width, height, f"/uploads/{identifier}.png", f"/thumbnails/{identifier}.webp"
 
 
@@ -83,6 +90,22 @@ def clean(value, limit=200):
     if not isinstance(value, str) or len(value) > limit:
         raise ValueError("A text field is invalid or too long.")
     return value.strip()
+
+
+def imported_designs(con, identifiers, owner):
+    """Return saved cards without making the browser reload the entire library."""
+    marks = ",".join("?" for _ in identifiers)
+    designs = [dict(row) for row in con.execute(
+        f"SELECT * FROM designs WHERE owner_id=? AND id IN ({marks})", (owner, *identifiers)
+    )]
+    memberships = {}
+    for row in con.execute(f"SELECT design_id,board_id FROM board_designs WHERE design_id IN ({marks})", identifiers):
+        memberships.setdefault(row["design_id"], []).append(row["board_id"])
+    for design in designs:
+        design["boards"] = memberships.get(design["id"], [])
+    return {"designs": designs, "media_urls": object_store.signed_urls([
+        path for design in designs for path in (design["thumbnail_url"], design["creator_avatar_url"], f"/previews/{design['id']}.webp")
+    ])}
 
 
 class ImportFailure(Exception):
@@ -242,7 +265,7 @@ def fetch_photo(url):
     return raw
 
 
-def fetch_avatar(url):
+def fetch_avatar(url, timeout=12):
     """Cache only public X profile images; a missing avatar never blocks a save."""
     if not isinstance(url, str):
         return ""
@@ -259,7 +282,7 @@ def fetch_avatar(url):
         request = Request(url, headers={"User-Agent": "Pluck/0.1", "Accept": "image/*"})
         for attempt in range(2):
             try:
-                with build_opener(NoRedirect).open(request, timeout=12) as response:
+                with build_opener(NoRedirect).open(request, timeout=timeout) as response:
                     raw = response.read(2 * 1024 * 1024 + 1)
                 break
             except (URLError, TimeoutError, ConnectionError) as error:
@@ -282,6 +305,21 @@ def fetch_avatar(url):
         return f"/avatars/{identifier}.webp"
     except (OSError, ValueError):
         return ""
+
+
+def download_post_media(photos, avatar):
+    """Bound network concurrency while keeping image encoding sequential."""
+    photos_pending = [_downloads.submit(fetch_photo, photo["url"]) for photo in photos]
+    avatar_pending = _downloads.submit(copy_context().run, fetch_avatar, avatar, timeout=4)
+    values, error = [], None
+    for future in [*photos_pending, avatar_pending]:
+        try:
+            values.append(future.result())
+        except Exception as failure:
+            error = error or failure
+    if error:
+        raise error
+    return values[:-1], values[-1]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -379,7 +417,12 @@ class Handler(BaseHTTPRequestHandler):
                 for design in designs:
                     design["boards"] = memberships.get(design["id"], [])
             return self.respond(
-                200, {"boards": boards, "designs": designs, "user": user}
+                200, {"boards": boards, "designs": designs, "user": user,
+                      "media_urls": object_store.signed_urls([
+                          path for design in designs
+                          for path in (design["thumbnail_url"], design["creator_avatar_url"],
+                                       f"/previews/{design['id']}.webp")
+                      ] + [user.get("avatar_url") if (user.get("avatar_url") or "").startswith("/avatars/") else ""])}
             )
         files = {
             "/": ROOT / "index.html",
@@ -450,16 +493,6 @@ class Handler(BaseHTTPRequestHandler):
             ".ttf": "font/ttf",
             ".woff2": "font/woff2",
         }
-        if file == ROOT / "index.html" and os.environ.get("PLUCK_STAGING") == "1":
-            body = body.replace(b'class="screen landing"', b'class="screen landing landing-stage"')
-            body = body.replace(b"data-coming-soon", b"data-add-design")
-            body = body.replace(b"Coming soon", b"Add my first design")
-            body = body.replace(
-                b'Add my first design\n          </button>',
-                b'<span class="launch-x"><img src="assets/workspace-x.svg" width="11.5" height="11.5" alt="" /></span>Paste X link\n          </button>',
-                1,
-            )
-            body = body.replace(b"to sort into boards.", b"to sort into moodboards.")
         self.send_response(200)
         self.send_header(
             "Content-Type", types.get(Path(path).suffix if private_media else file.suffix, "application/octet-stream")
@@ -539,8 +572,8 @@ class Handler(BaseHTTPRequestHandler):
                     name = clean(body.get("name"), 81)
                     if not name:
                         raise ValueError("Name your board.")
-                    if len(name) > 15:
-                        raise ValueError("Name should not be more than 15 characters.")
+                    if len(name) > BOARD_NAME_LIMIT:
+                        raise ValueError(f"Name should not be more than {BOARD_NAME_LIMIT} letters.")
                     identifier = uuid.uuid4().hex
                     con.execute(
                         "INSERT INTO boards(id,name,owner_id) VALUES(?,?,?)",
@@ -556,19 +589,37 @@ class Handler(BaseHTTPRequestHandler):
                     ).fetchone():
                         return self.respond(404, {"error": "Board not found."})
                     if method == "DELETE":
+                        removed = [row["id"] for row in con.execute(
+                            "SELECT d.id FROM designs d JOIN board_designs bd ON bd.design_id=d.id "
+                            "WHERE bd.board_id=? AND d.owner_id=?", (match[1], owner)
+                        )]
+                        con.executemany("DELETE FROM designs WHERE id=? AND owner_id=?",
+                                        [(identifier, owner) for identifier in removed])
                         con.execute("DELETE FROM boards WHERE id=?", (match[1],))
                     else:
                         name = clean(body.get("name"), 81)
                         if not name:
                             raise ValueError("Name your board.")
-                        if len(name) > 15:
-                            raise ValueError("Name should not be more than 15 characters.")
+                        if len(name) > BOARD_NAME_LIMIT:
+                            raise ValueError(f"Name should not be more than {BOARD_NAME_LIMIT} letters.")
                         con.execute(
                             "UPDATE boards SET name=? WHERE id=?", (name, match[1])
                         )
                     con.commit()
+                    if method == "DELETE":
+                        for identifier in removed:
+                            for directory, extension in (("uploads", "png"), ("thumbnails", "webp"), ("previews", "webp")):
+                                try:
+                                    object_store.delete(DATA, f"/{directory}/{identifier}.{extension}")
+                                except OSError:
+                                    self.log_error("Could not remove deleted board media")
                     return self.respond(200, {"ok": True})
                 if path == "/api/import" and method == "POST":
+                    board_id = body.get("board_id")
+                    if not isinstance(board_id, str) or not con.execute(
+                        "SELECT 1 FROM boards WHERE id=? AND owner_id=?", (board_id, owner)
+                    ).fetchone():
+                        raise ValueError("Select a board!")
                     token = os.environ.get("X_BEARER_TOKEN")
                     source = clean(body.get("url"), 2000)
                     parsed = urlparse(source)
@@ -589,27 +640,16 @@ class Handler(BaseHTTPRequestHandler):
                         )
                     ]
                     if existing:
-                        missing_avatar = con.execute(
-                            "SELECT 1 FROM designs WHERE source=? AND owner_id=? "
-                            "AND (creator_avatar_url IS NULL OR creator_avatar_url='')",
-                            (source, owner),
-                        ).fetchone()
-                        if missing_avatar:
-                            try:
-                                _, _, _, avatar = fetch_post(match[1], token)
-                                avatar_url = fetch_avatar(avatar)
-                            except ImportFailure:
-                                avatar_url = ""
-                            if avatar_url:
-                                con.execute(
-                                    "UPDATE designs SET creator_avatar_url=? WHERE source=? AND owner_id=? "
-                                    "AND (creator_avatar_url IS NULL OR creator_avatar_url='')",
-                                    (avatar_url, source, owner),
-                                )
-                        return self.respond(200, {"ids": existing, "existing": True})
+                        for identifier in existing:
+                            con.execute("INSERT INTO board_designs(board_id,design_id) VALUES(?,?) "
+                                        "ON CONFLICT DO NOTHING", (board_id, identifier))
+                        con.commit()
+                        return self.respond(200, {"ids": existing, "existing": True, **imported_designs(con, existing, owner)})
+                    started = time.perf_counter()
                     title, creator, photos, avatar = fetch_post(match[1], token)
-                    avatar_url = fetch_avatar(avatar)
-                    staged = [fetch_photo(photo["url"]) for photo in photos]
+                    post_fetched = time.perf_counter()
+                    staged, avatar_url = download_post_media(photos, avatar)
+                    downloaded = time.perf_counter()
                     identifiers = []
                     for raw in staged:
                         identifier = uuid.uuid4().hex
@@ -631,8 +671,11 @@ class Handler(BaseHTTPRequestHandler):
                             ),
                         )
                         identifiers.append(identifier)
+                        con.execute("INSERT INTO board_designs(board_id,design_id) VALUES(?,?)",
+                                    (board_id, identifier))
                     con.commit()
-                    return self.respond(201, {"ids": identifiers})
+                    print(f"X import: images={len(identifiers)} post={post_fetched-started:.2f}s downloads={downloaded-post_fetched:.2f}s processing_uploads={time.perf_counter()-downloaded:.2f}s", flush=True)
+                    return self.respond(201, {"ids": identifiers, **imported_designs(con, identifiers, owner)})
                 if path == "/api/designs" and method == "POST":
                     title = clean(body.get("title"), 200)
                     if not title:
@@ -777,7 +820,7 @@ def load_local_env(path):
     if not path.is_file():
         return
     allowed = {
-        "PORT", "HOST", "APP_ORIGIN", "PLUCK_STAGING", "X_BEARER_TOKEN",
+        "PORT", "HOST", "APP_ORIGIN", "X_BEARER_TOKEN",
         "DATABASE_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_STORAGE_BUCKET", "RESEND_API_KEY", "EMAIL_FROM",
         "LOCAL_EMAIL_PREVIEW", "LOCAL_FILLED_LIBRARY",

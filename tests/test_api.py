@@ -206,14 +206,45 @@ class API(unittest.TestCase):
         unauthorized_preview.exception.close()
         self.call("api/boards/" + board["id"], "PATCH", {"name": "Renamed"})
         self.call("api/boards/" + board["id"], "DELETE", {})
-        item = next(
-            d for d in self.call("api/state")[1]["designs"] if d["id"] == design["id"]
-        )
-        self.assertEqual(item["boards"], [])
-        self.call("api/designs/" + design["id"], "DELETE", {})
-        self.assertFalse(
-            any(d["id"] == design["id"] for d in self.call("api/state")[1]["designs"])
-        )
+        self.assertFalse(any(d["id"] == design["id"] for d in self.call("api/state")[1]["designs"]))
+        for folder, extension in (("uploads", "png"), ("thumbnails", "webp"), ("previews", "webp")):
+            self.assertFalse((Path(self.temp.name) / folder / f"{design['id']}.{extension}").exists())
+
+    def test_board_name_limit_is_fifteen(self):
+        status, board = self.call("api/boards", "POST", {"name": "a" * 15})
+        self.assertEqual(status, 201)
+        self.assertEqual(self.call("api/boards", "POST", {"name": "a" * 16})[0], 400)
+        self.assertEqual(self.call("api/boards/" + board["id"], "PATCH", {"name": "b" * 15})[0], 200)
+        self.assertEqual(self.call("api/boards/" + board["id"], "PATCH", {"name": "b" * 16})[0], 400)
+
+    def test_import_requires_owned_board_and_assigns_cached_designs(self):
+        _, board = self.call("api/boards", "POST", {"name": "Imports"})
+        source = "https://x.com/designer/status/12345678"
+        self.assertEqual(self.call("api/import", "POST", {"url": source})[0], 400)
+        other_cookie = self.sign_in("import-other@example.test")
+        mine = self.cookie
+        self.cookie = other_cookie
+        _, foreign = self.call("api/boards", "POST", {"name": "Private"})
+        self.cookie = mine
+        self.assertEqual(self.call("api/import", "POST", {"url": source, "board_id": foreign["id"]})[0], 400)
+        raw = Path("assets/background.webp").read_bytes()
+        _, design = self.call("api/designs", "POST", {"title": "Cached import", "image": base64.b64encode(raw).decode(), "source": source})
+        with closing(sqlite3.connect(Path(self.temp.name) / "moodboard.sqlite3")) as con, con:
+            con.execute("UPDATE designs SET creator_avatar_url='/avatars/cached.webp' WHERE id=?", (design["id"],))
+        for _ in range(2):
+            status, result = self.call("api/import", "POST", {"url": source + "?s=20", "board_id": board["id"]})
+            self.assertEqual(status, 200)
+            self.assertTrue(result["existing"])
+            self.assertEqual(result["designs"][0]["id"], design["id"])
+            self.assertIn(board["id"], result["designs"][0]["boards"])
+        _, second = self.call("api/boards", "POST", {"name": "Shared"})
+        self.call("api/designs/" + design["id"], "PATCH", {"boards": [board["id"], second["id"]]})
+        item = next(d for d in self.call("api/state")[1]["designs"] if d["id"] == design["id"])
+        self.assertEqual(set(item["boards"]), {board["id"], second["id"]})
+        self.assertEqual(self.call("api/boards/" + board["id"], "DELETE", {})[0], 200)
+        state = self.call("api/state")[1]
+        self.assertFalse(any(d["id"] == design["id"] for d in state["designs"]))
+        self.assertTrue(any(b["id"] == second["id"] for b in state["boards"]))
 
     def test_https_staging_origin(self):
         cls = type(self)

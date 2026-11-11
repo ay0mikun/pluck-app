@@ -14,6 +14,31 @@ import object_store
 
 
 class HostedTests(unittest.TestCase):
+    def test_batch_signed_media_uses_only_requested_paths(self):
+        opener = Mock()
+        opener.open.return_value = io.BytesIO(json.dumps([
+            {"path": "thumbnails/a.webp", "signedURL": "/object/sign/pluck-media/thumbnails/a.webp?token=temporary", "error": None},
+            {"path": "previews/missing.webp", "signedURL": None, "error": "not found"},
+            {"path": "avatars/other.webp", "signedURL": "/object/sign/pluck-media/avatars/other.webp?token=other", "error": None},
+        ]).encode())
+        with patch.dict(os.environ, {
+            "SUPABASE_URL": "https://project.supabase.co",
+            "SUPABASE_SERVICE_ROLE_KEY": "test-key", "SUPABASE_STORAGE_BUCKET": "pluck-media",
+        }), patch("object_store.build_opener", return_value=opener):
+            signed = object_store.signed_urls(["/thumbnails/a.webp", "/previews/missing.webp"])
+        self.assertEqual(list(signed), ["/thumbnails/a.webp"])
+        self.assertTrue(signed["/thumbnails/a.webp"].startswith("https://project.supabase.co/storage/v1/object/sign/"))
+        request = opener.open.call_args.args[0]
+        self.assertEqual(json.loads(request.data)["expiresIn"], "3600")
+        self.assertEqual(request.full_url, "https://project.supabase.co/storage/v1/object/sign/pluck-media")
+
+    def test_signing_failure_preserves_local_media_fallback(self):
+        with patch.dict(os.environ, {
+            "SUPABASE_URL": "https://project.supabase.co", "SUPABASE_SERVICE_ROLE_KEY": "test-key",
+        }), patch("object_store.build_opener") as opener:
+            opener.return_value.open.side_effect = OSError("Offline")
+            self.assertEqual(object_store.signed_urls(["/thumbnails/a.webp"]), {})
+
     def test_postgres_queries_and_write_lock(self):
         connection = Mock()
         hosted = database.Postgres(connection)

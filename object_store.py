@@ -4,12 +4,15 @@ import os
 import json
 from contextlib import contextmanager
 from contextvars import ContextVar
+from contextvars import copy_context
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 _pending = ContextVar("pending_media", default=None)
+_uploads = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pluck-storage")
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -70,6 +73,36 @@ def verify_bucket():
         raise ValueError("The Supabase storage bucket must be private.")
 
 
+def signed_urls(paths):
+    """Sign only media already authorized by the caller; keep the bucket private."""
+    configured = settings()
+    paths = sorted({path.lstrip("/") for path in paths if path})
+    if not configured or not paths:
+        return {}
+    url, key, bucket = configured
+    result = {}
+    try:
+        for offset in range(0, len(paths), 200):
+            selected = paths[offset:offset + 200]
+            request = Request(
+                f"{url}/storage/v1/object/sign/{bucket}",
+                data=json.dumps({"paths": selected, "expiresIn": "3600"}).encode(),
+                headers={"apikey": key, "Authorization": f"Bearer {key}",
+                         "Content-Type": "application/json", "User-Agent": "Pluck/0.1"},
+                method="POST",
+            )
+            with build_opener(NoRedirect).open(request, timeout=8) as response:
+                items = json.loads(response.read(2 * 1024 * 1024))
+            for item in items:
+                path, signed = item.get("path"), item.get("signedURL")
+                if path in selected and not item.get("error") and isinstance(signed, str) and signed.startswith("/object/sign/"):
+                    result["/" + path] = url + "/storage/v1" + signed
+    except (OSError, ValueError, TypeError, AttributeError):
+        # Existing owner-checked media routes remain a fallback.
+        pass
+    return result
+
+
 def write(data_directory, path, raw):
     pending = _pending.get()
     if pending is not None:
@@ -86,6 +119,25 @@ def read(data_directory, path):
     if settings():
         return request("GET", path)
     return (Path(data_directory) / path.lstrip("/")).read_bytes()
+
+
+def write_many(data_directory, files):
+    """Upload variants concurrently, preserving the caller's rollback batch."""
+    if not settings():
+        for path, raw in files:
+            write(data_directory, path, raw)
+        return
+    futures = [_uploads.submit(copy_context().run, write, data_directory, path, raw)
+               for path, raw in files]
+    # Drain every worker before propagating failures, so rollback cannot race uploads.
+    error = None
+    for future in futures:
+        try:
+            future.result()
+        except Exception as failure:
+            error = error or failure
+    if error:
+        raise error
 
 
 def delete(data_directory, path):

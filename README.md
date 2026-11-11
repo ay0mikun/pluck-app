@@ -12,11 +12,11 @@ python3 -m venv .venv
 npm start
 ```
 
-Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 23 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
+Open http://127.0.0.1:5173. `npm run check` checks syntax; `npm test` runs 29 tests covering accounts, private media access and caching, persistence, provider behavior, and image processing.
 
 ## Accounts and existing data
 
-The login screen supports X and passwordless email. Pluck sends a single-use email link that expires after 15 minutes. After verification, it opens an existing account or creates one for a new address. Sessions last 90 days and renew when the app opens; expired sessions require sign-in again. Existing email accounts keep their library. The first account created claims the legacy library. New accounts start with All. Users create additional boards as needed.
+The login screen supports X and passwordless email. Pluck sends a single-use email link that expires after 15 minutes. After verification, it opens an existing account or creates one for a new address. Sessions last 90 days and renew when the app opens; expired sessions require sign-in again. Existing email accounts keep their library. The first account created claims the legacy library. New accounts start with All. Users create additional boards as needed. The app opens at login, or restores the library when the saved session is valid.
 
 For local testing, set `LOCAL_EMAIL_PREVIEW=1` in `.env` and restart. Submitting an email shows an **Open local sign-in link** action. Accounts persist in `data/moodboard.sqlite3`. This mode skips inbox ownership verification and is intended for loopback development only.
 
@@ -115,3 +115,13 @@ Without `DATABASE_URL` and Supabase variables, the app uses the existing local
 SQLite database and files. `LOCAL_EMAIL_PREVIEW=1` works only on loopback.
 Keep hosted keys out of a local mock environment if you want to test isolated
 SQLite accounts.
+
+## Board behavior
+
+Board names allow up to **15 characters**, for both creation and editing. This is a fixed product requirement and takes precedence over counters or limits shown in future Figma updates unless the user explicitly changes it.
+
+All is a virtual parent library and cannot be edited. Custom boards can be renamed or deleted. Deleting a board permanently removes its designs from the library and every other board, and removes their stored image variants. The UI requires confirmation.
+
+X imports require a valid post link and an owned `board_id`. New and cached imports attach to that board in the same database transaction; the save button stays disabled until both fields are valid.
+
+X import downloads use a shared four-worker limit. Image variants upload concurrently with rollback tracking, while image encoding remains sequential to limit memory use. Repeat imports reuse saved images without waiting for avatar repair. The save response includes the updated cards so the frontend does not reload the whole library before showing success. Import logs report download and processing/upload times without post URLs or credentials.

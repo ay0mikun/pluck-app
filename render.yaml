@@ -10,8 +10,6 @@ services:
     envVars:
       - key: HOST
         value: 0.0.0.0
-      - key: PLUCK_STAGING
-        value: "1"
       - key: LOCAL_EMAIL_PREVIEW
         value: "0"
       - key: LOCAL_FILLED_LIBRARY

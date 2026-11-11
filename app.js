@@ -16,13 +16,14 @@ let currentScreen = null,
   galleryFrame,
   toastTimer;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
-const visitKey = "pluck-visited";
-function hasVisited() {
-  try { return localStorage.getItem(visitKey) === "1"; } catch { return false; }
-}
-function rememberVisit() {
-  try { localStorage.setItem(visitKey, "1"); } catch { /* Storage may be disabled. */ }
-}
+const mediaURL = (path) => state.media_urls?.[path] || path;
+const imageObserver = new IntersectionObserver((entries) => {
+  for (const { target: image, isIntersecting } of entries) {
+    if (!isIntersecting) continue;
+    imageObserver.unobserve(image);
+    image.src = mediaURL(image.dataset.src);
+  }
+}, { rootMargin: "240px" });
 let wheelFrame = 0;
 let wheelTarget = 0;
 
@@ -88,7 +89,12 @@ async function api(path, method = "GET", data) {
 }
 function toast(message) {
   const node = $("#toast");
-  node.textContent = message;
+  node.replaceChildren();
+  const icon = document.createElement("img");
+  icon.src = "/assets/toast-success.svg";
+  icon.width = icon.height = 18;
+  icon.alt = "";
+  node.append(icon, document.createTextNode(message));
   if (node.matches(":popover-open")) node.hidePopover();
   const dialogs = [...document.querySelectorAll("dialog:modal")];
   (dialogs.at(-1) || document.body).append(node);
@@ -127,7 +133,6 @@ async function route() {
     return;
   }
   if (user) {
-    rememberVisit();
     if (hash !== "#library") history.replaceState(null, "", "/#library");
     showScreen("workspace");
     try {
@@ -137,18 +142,15 @@ async function route() {
     }
     return;
   }
-  if (hash === "#auth" || hash.startsWith("#library") || hasVisited()) {
-    rememberVisit();
-    history.replaceState(null, "", "/#auth");
-    return showScreen("auth-screen");
-  }
-  rememberVisit();
-  showScreen("landing");
+  try { localStorage.removeItem("pluck-session-hint"); } catch {}
+  history.replaceState(null, "", "/#auth");
+  showScreen("auth-screen");
 }
 window.addEventListener("hashchange", route);
 async function refresh() {
   state = await api("state");
   user = state.user;
+  try { localStorage.setItem("pluck-session-hint", "1"); } catch {}
   renderAccount();
   if (!state.boards.some((board) => board.id === selectedBoard)) selectedBoard = null;
   render();
@@ -295,6 +297,7 @@ $("#logout").onclick = async () => {
     user = null;
     state = { boards: [], designs: [] };
     selectedBoard = null;
+    render();
     if ($("#account-menu").matches(":popover-open")) $("#account-menu").hidePopover();
     if ($("#account-drawer").open) $("#account-drawer").close();
     location.hash = "auth";
@@ -320,7 +323,7 @@ function renderAccount() {
   const avatar = user?.avatar_url;
   if (avatar && (avatar.startsWith("/avatars/") || avatar.startsWith("https://"))) {
     const image = document.createElement("img");
-    image.src = avatar;
+    image.src = mediaURL(avatar);
     image.width = image.height = 34;
     image.alt = "";
     image.onerror = () => image.replaceWith(fallback);
@@ -337,13 +340,6 @@ accountButton.addEventListener("click", (event) => {
   if (accountMenu.matches(":popover-open")) accountMenu.hidePopover();
   accountContents = [...accountMenu.children];
   accountDrawer.append(...accountContents);
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "board-drawer-close";
-  close.setAttribute("aria-label", "Close account menu");
-  close.innerHTML = '<img src="/assets/import-close.svg" alt="" />';
-  close.onclick = () => closeDialog(accountDrawer);
-  accountDrawer.append(close);
   accountButton.setAttribute("aria-expanded", "true");
   openDialog(accountDrawer);
 });
@@ -359,45 +355,6 @@ mobileAccount.addEventListener("change", () => {
 });
 const filters = $("#filters");
 
-function followHover(container, selector) {
-  let previous;
-  const hide = () => {
-    previous = null;
-    container.removeAttribute("data-hover-fill");
-  };
-  container.addEventListener("pointerover", (event) => {
-    if (event.pointerType !== "mouse") return;
-    const item = event.target.closest(selector);
-    if (!item || item === previous) return;
-    previous = item;
-    const bounds = container.getBoundingClientRect();
-    const row = item.getBoundingClientRect();
-    const visible = item.closest(".board-options")?.getBoundingClientRect();
-    const top = visible ? Math.max(row.top, visible.top) : row.top;
-    const bottom = visible ? Math.min(row.bottom, visible.bottom) : row.bottom;
-    container.style.setProperty("--hover-x", `${row.left - bounds.left + container.scrollLeft}px`);
-    container.style.setProperty("--hover-y", `${top - bounds.top + container.scrollTop}px`);
-    container.style.setProperty("--hover-width", `${row.width}px`);
-    container.style.setProperty("--hover-height", `${Math.max(0, bottom - top)}px`);
-    container.dataset.hoverFill = item.matches(".active") ? "selected" : "visible";
-  });
-  container.addEventListener("pointerleave", hide);
-  container.addEventListener("scroll", hide, { capture: true, passive: true });
-  return hide;
-}
-
-const clearFilterHover = followHover(filters, ".filter");
-
-function positionFilterHighlight() {
-  const active = filters.querySelector(".filter.active");
-  if (!active || !active.offsetWidth) return;
-  filters.style.setProperty("--filter-x", `${active.offsetLeft}px`);
-  filters.style.setProperty("--filter-width", `${active.offsetWidth}px`);
-}
-
-new ResizeObserver(positionFilterHighlight).observe(filters);
-document.fonts.ready.then(positionFilterHighlight);
-
 function render() {
   const boardCounts = new Map();
   for (const design of state.designs) {
@@ -406,7 +363,6 @@ function render() {
     }
   }
   const scrollLeft = filters.scrollLeft;
-  clearFilterHover();
   filters.innerHTML = [{ id: "", name: "All" }, ...state.boards]
     .map(({ id, name }) => {
       const active = id === (selectedBoard || "");
@@ -416,37 +372,46 @@ function render() {
     .join("");
   filters.insertAdjacentHTML("beforeend", '<button id="new-board" class="filter add-board" type="button" aria-label="Create new board">+</button>');
   filters.scrollTo({ left: scrollLeft, behavior: "instant" });
-  positionFilterHighlight();
   const designs = state.designs.filter(
     (design) => !selectedBoard || design.boards.includes(selectedBoard),
   );
   const isEmpty = designs.length === 0;
-  $("#item-count").textContent = isEmpty
-    ? ""
-    : `${designs.length} design${designs.length === 1 ? "" : "s"} saved`;
+  const board = state.boards.find((item) => item.id === selectedBoard);
+  $("#edit-board").hidden = !board;
+  $("#item-count").innerHTML = !board && isEmpty ? "" : `${designs.length} design${designs.length === 1 ? "" : "s"} saved${board ? ` to <span>${escapeHTML(board.name)}</span>` : ""}`;
   $("#empty-state").hidden = !isEmpty;
-  $("#empty-state h1").textContent = selectedBoard
-    ? "A fresh board, ready for inspiration"
-    : "Add your first design from X";
+  $("#empty-state h1").textContent = board ? "Save a design to your board" : "Add your first design from X";
   $("#empty-state p").textContent = "Paste a tweet link to save your first design.";
-  $("#empty-add span").textContent = state.designs.length
-    ? "Add a design"
-    : "Add my first design";
-  $("#design-grid").innerHTML = designs
+  $("#empty-add span").textContent = "Add my first design";
+  const grid = $("#design-grid");
+  const contentKey = JSON.stringify(designs.map((d) => [d.id, d.thumbnail_url, d.creator_avatar_url]));
+  if (grid.dataset.contentKey === contentKey) {
+    layoutGallery();
+    return;
+  }
+  imageObserver.disconnect();
+  grid.dataset.contentKey = contentKey;
+  grid.innerHTML = designs
     .map((d, index) => {
       const ratio = d.width / d.height;
       const displayRatio = Math.max(ratio, 0.4);
-      return `<button class="design-card loading" data-design="${d.id}" data-ratio="${displayRatio}" aria-label="Open ${escapeHTML(d.title)}"><span class="image-slot" style="--image-ratio:${displayRatio}"><img src="${d.thumbnail_url}" width="${d.width}" height="${d.height}" alt="${escapeHTML(d.title)}" loading="${index < 5 ? "eager" : "lazy"}" decoding="async" /></span>${d.creator ? `<span class="creator-badge">${d.creator_avatar_url ? `<img class="creator-avatar" src="${escapeHTML(d.creator_avatar_url)}" alt="" width="28" height="28" loading="lazy" />` : `<span class="creator-initial" aria-hidden="true">${escapeHTML(d.creator.replace(/^@/, "")[0]?.toUpperCase() || "")}</span>`}<span class="creator-name">${escapeHTML(d.creator.replace(/^@/, ""))}</span></span>` : ""}${ratio < 0.4 ? '<span class="extreme-label">View full image ↗</span>' : ""}</button>`;
+      return `<button class="design-card loading" aria-busy="true" data-design="${d.id}" data-ratio="${displayRatio}" aria-label="Open ${escapeHTML(d.title)}"><span class="image-slot" style="--image-ratio:${displayRatio}"><img data-src="${escapeHTML(d.thumbnail_url)}" width="${d.width}" height="${d.height}" alt="${escapeHTML(d.title)}" loading="${index === 0 ? "eager" : "lazy"}" fetchpriority="${index === 0 ? "high" : "auto"}" decoding="async" /></span>${d.creator ? `<span class="creator-badge">${d.creator_avatar_url ? `<img class="creator-avatar" data-src="${escapeHTML(d.creator_avatar_url)}" alt="" width="28" height="28" loading="lazy" />` : `<span class="creator-initial" aria-hidden="true">${escapeHTML(d.creator.replace(/^@/, "")[0]?.toUpperCase() || "")}</span>`}<span class="creator-name">${escapeHTML(d.creator.replace(/^@/, ""))}</span></span>` : ""}${ratio < 0.4 ? '<span class="extreme-label">View full image ↗</span>' : ""}</button>`;
     })
     .join("");
   $("#design-grid")
     .querySelectorAll(".image-slot img")
     .forEach((img) => {
       const loaded = () => {
+        img.closest(".design-card").removeAttribute("aria-busy");
         img.closest(".design-card").classList.remove("loading");
         img.closest(".design-card").classList.add("loaded");
       };
       const failed = () => {
+        if (img.src !== new URL(img.dataset.src, location.href).href) {
+          img.src = img.dataset.src;
+          return;
+        }
+        img.closest(".design-card").removeAttribute("aria-busy");
         img.closest(".design-card").classList.remove("loading");
         const error = document.createElement("span");
         error.className = "image-error";
@@ -454,8 +419,8 @@ function render() {
         img.closest(".image-slot").append(error);
       };
       img.addEventListener("load", loaded, { once: true });
-      img.addEventListener("error", failed, { once: true });
-      if (img.complete) {
+      img.addEventListener("error", failed);
+      if (img.getAttribute("src") && img.complete) {
         if (img.naturalWidth) loaded();
         else failed();
       }
@@ -479,6 +444,7 @@ function render() {
       ),
     );
   layoutGallery();
+  grid.querySelectorAll("img[data-src]").forEach((image) => imageObserver.observe(image));
 }
 // Compute positions from stored ratios, not image load events. Each next card
 // occupies the shortest column; image decoding can only change opacity.
@@ -534,120 +500,143 @@ const importDialog = $("#import-dialog");
 const importForm = $("#import-form");
 const importUrl = $("#tweet-url");
 const importButton = importForm.querySelector("[type=submit]");
-const importPaste = $("#paste-clipboard");
 const importStatus = $("#import-status");
 const importError = $("#import-error");
-
+const importPicker = $("#import-board-picker");
+let importBoard = null;
+let importDrawer = null;
+function validPostLink(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && ["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(url.hostname) && /^\/[A-Za-z0-9_]+\/status\/\d+\/?$/.test(url.pathname);
+  } catch { return false; }
+}
 function setImportState(error = "") {
   const busy = importDialog.dataset.busy === "true";
+  const board = state.boards.find((item) => item.id === importBoard);
+  const valid = validPostLink(importUrl.value.trim());
   importUrl.setAttribute("aria-invalid", String(Boolean(error)));
   importUrl.readOnly = busy;
   importUrl.nextElementSibling.hidden = !error;
   importError.hidden = !error;
   importError.textContent = error;
-  importButton.disabled = busy || Boolean(error);
-  importButton.toggleAttribute("data-muted", !importUrl.value.trim());
+  importButton.disabled = busy || !valid || !board;
+  importButton.toggleAttribute("data-muted", !valid || !board);
+  importButton.setAttribute("aria-busy", String(busy));
   importButton.querySelector("img").hidden = !busy;
-  importButton.querySelector(".button-label").textContent = error
-    ? "Enter a valid link"
-    : busy ? "Fetching designs" : "Fetch designs";
-  importPaste.hidden = busy || Boolean(error);
+  importButton.querySelector(".button-label").textContent = error ? "Enter a valid link" : busy ? "Saving designs" : "Save designs";
+  $("#import-board-name").textContent = board?.name || "Select board";
+  importPicker.querySelector("summary").setAttribute("aria-disabled", String(busy));
+  $("#import-board-error").hidden = true;
 }
-
+function renderImportBoards() {
+  const panel = importDrawer?.querySelector(".board-picker-panel") || importPicker.querySelector(".board-picker-panel");
+  panel.querySelector(".board-options").innerHTML = state.boards.map(({id, name}) => `<label><input type="radio" name="import-board" value="${escapeHTML(id)}"${id === importBoard ? " checked" : ""} /><span>${escapeHTML(name)}</span></label>`).join("");
+  panel.querySelector(".board-options").hidden = !state.boards.length;
+}
+function closeImportPicker() {
+  importPicker.open = false;
+  if (importDrawer?.open) closeDialog(importDrawer);
+  if (importPicker.contains(document.activeElement)) importDialog.focus({ preventScroll: true });
+}
+importPicker.addEventListener("change", ({ target }) => {
+  if (!target.matches("input")) return;
+  importBoard = target.value;
+  closeImportPicker();
+  setImportState();
+});
+importPicker.querySelector("summary").onclick = (event) => {
+  if (importDialog.dataset.busy === "true") { event.preventDefault(); return; }
+  if (!matchMedia("(max-width: 700px)").matches) return;
+  event.preventDefault();
+  if (importDrawer?.open) return;
+  const panel = importPicker.querySelector(".board-picker-panel");
+  const drawer = document.createElement("dialog");
+  importDrawer = drawer;
+  drawer.className = "board-drawer import-board-drawer";
+  drawer.setAttribute("aria-label", "Save to a board");
+  drawer.append(panel);
+  importDialog.append(drawer);
+  drawer.addEventListener("change", ({ target }) => {
+    if (!target.matches("input")) return;
+    importBoard = target.value;
+    closeDialog(drawer);
+    setImportState();
+  });
+  drawer.addEventListener("cancel", (event) => { event.preventDefault(); closeDialog(drawer); });
+  drawer.addEventListener("click", (event) => {
+    if (event.target === drawer) closeDialog(drawer);
+  });
+  drawer.addEventListener("close", () => {
+    importPicker.append(panel);
+    drawer.remove();
+    if (importDrawer === drawer) importDrawer = null;
+    requestAnimationFrame(() => { if (importDialog.open && !document.querySelector("#board-dialog[open]")) importDialog.focus({preventScroll:true}); });
+  }, {once:true});
+  openDialog(drawer);
+};
+importPicker.querySelector(".board-create").onclick = () => {
+  closeImportPicker();
+  openBoard(async ({id}) => {
+    importBoard = id;
+    renderImportBoards();
+    setImportState();
+    importDialog.focus({preventScroll:true});
+  });
+};
 function openImportDialog() {
+  importForm.reset();
+  importBoard = selectedBoard;
   importStatus.textContent = "";
+  renderImportBoards();
   setImportState();
   openDialog(importDialog);
 }
-
 $("#paste-link").onclick = $("#empty-add").onclick = openImportDialog;
-document.querySelectorAll("[data-add-design]").forEach((button) => {
-  button.onclick = () => {
-    if (user) {
-      location.hash = "library";
-      openImportDialog();
-    } else {
-      location.hash = "auth";
-    }
-  };
-});
-importUrl.oninput = () => {
-  importStatus.textContent = "";
-  setImportState();
+importUrl.oninput = () => { importStatus.textContent = ""; setImportState(); };
+importUrl.onblur = () => {
+  if (importUrl.value.trim() && !validPostLink(importUrl.value.trim())) setImportState("Invalid link");
 };
-
-importPaste.onclick = async () => {
-  try {
-    const value = await navigator.clipboard.readText();
-    if (!importDialog.open || importButton.disabled) return;
-    importUrl.value = value.trim();
-    importUrl.oninput();
-    importUrl.focus();
-  } catch {
-    if (!importDialog.open || importButton.disabled) return;
-    importUrl.focus();
-    importStatus.textContent = "Use ⌘V or Ctrl+V to paste your X post link.";
-  }
-};
-
 importForm.onsubmit = async (event) => {
   event.preventDefault();
-  if (importButton.disabled) return;
+  if (importDialog.dataset.busy === "true") return;
   const url = importUrl.value.trim();
-  let valid = false;
-  try {
-    const link = new URL(url);
-    valid = link.protocol === "https:" &&
-      ["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(link.hostname) &&
-      /^\/[A-Za-z0-9_]+\/status\/\d+\/?$/.test(link.pathname);
-  } catch {
-    // An incomplete URL is displayed as a field error below.
-  }
-  importStatus.textContent = "";
-  if (!valid) {
-    setImportState(url ? "Invalid link" : "Link is missing!");
-    importUrl.focus();
+  if (!validPostLink(url)) { setImportState(url ? "Invalid link" : "Link is missing!"); return; }
+  if (!state.boards.some((board) => board.id === importBoard)) {
+    $("#import-board-error").hidden = false;
+    importButton.querySelector(".button-label").textContent = "Select a board";
     return;
   }
-
+  closeImportPicker();
   importDialog.dataset.busy = "true";
   setImportState();
   try {
-    const result = await api("import", "POST", { url });
-    if (selectedBoard) {
-      await Promise.all(
-        result.ids.map((id) => {
-          const design = state.designs.find((item) => item.id === id);
-          return api(`designs/${id}`, "PATCH", {
-            boards: [...new Set([...(design?.boards || []), selectedBoard])],
-          });
-        }),
-      );
-    }
-    await refresh();
+    const result = await api("import", "POST", {url, board_id: importBoard});
+    selectedBoard = importBoard;
+    if (result.designs) {
+      const updated = new Map(result.designs.map((design) => [design.id, design]));
+      const added = result.designs.filter((design) => !state.designs.some((item) => item.id === design.id));
+      state.designs = [...added, ...state.designs.map((design) => updated.get(design.id) || design)];
+      state.media_urls = {...state.media_urls, ...result.media_urls};
+      render();
+    } else await refresh();
     importDialog.close();
     importForm.reset();
-    toast(
-      result.existing
-        ? "This post is already in your library."
-        : `${result.ids.length} design${result.ids.length === 1 ? "" : "s"} saved.`,
-    );
+    toast(result.existing ? "Designs saved to board." : `${result.ids.length} design${result.ids.length === 1 ? "" : "s"} saved.`);
   } catch (error) {
     importStatus.textContent = error.message;
-  } finally {
-    delete importDialog.dataset.busy;
-    setImportState();
-  }
+  } finally { delete importDialog.dataset.busy; setImportState(); }
 };
 const boardName = $("#board-name");
 const boardForm = $("#board-form");
 const boardSubmit = boardForm.querySelector("[type=submit]");
+// Product rule: keep 15 characters even when Figma examples show another limit.
 const boardNameLimit = 15;
 
 function updateBoardName(showRequired = false) {
   const length = Array.from(boardName.value).length;
   const message = length > boardNameLimit
-    ? `Name should not be more than ${boardNameLimit} characters`
+    ? `Name should not be more than ${boardNameLimit} letters`
     : showRequired && !boardName.value.trim() ? "Required" : "";
   $("#board-name-count").textContent = `${length}/${boardNameLimit}`;
   const error = $("#board-name-error");
@@ -685,7 +674,66 @@ boardForm.onsubmit = (e) => {
     if (!onCreated) toast("Board created.");
   }).finally(() => updateBoardName());
 };
-function confirmDelete(description, action) {
+const editDialog = $("#edit-board-dialog");
+const editForm = $("#edit-board-form");
+const editName = $("#edit-board-name");
+let editingBoard = null;
+function updateEditBoard() {
+  const length = Array.from(editName.value).length;
+  const message = length > boardNameLimit ? `Name should not be more than ${boardNameLimit} letters` : "";
+  $("#edit-board-count").textContent = `${length}/${boardNameLimit}`;
+  $("#edit-board-error").textContent = message;
+  $("#edit-board-error").hidden = !message;
+  editName.setAttribute("aria-invalid", String(Boolean(message)));
+  editForm.querySelector("[type=submit]").disabled = !editingBoard || Boolean(message) || !editName.value.trim() || editName.value.trim() === editingBoard.name || editDialog.dataset.busy === "true";
+}
+$("#edit-board").onclick = () => {
+  editingBoard = state.boards.find((board) => board.id === selectedBoard);
+  if (!editingBoard) return;
+  editName.value = editingBoard.name;
+  editForm.querySelector(".form-status").textContent = "";
+  updateEditBoard();
+  openDialog(editDialog);
+};
+editName.oninput = updateEditBoard;
+$("#cancel-edit-board").onclick = () => closeDialog(editDialog);
+editForm.onsubmit = async (event) => {
+  event.preventDefault();
+  updateEditBoard();
+  const button = editForm.querySelector("[type=submit]");
+  if (button.disabled) return;
+  const board = editingBoard;
+  editDialog.dataset.busy = "true";
+  button.disabled = true;
+  button.querySelector("img").hidden = false;
+  button.querySelector("span").textContent = "Saving";
+  editName.readOnly = true;
+  try {
+    await api(`boards/${board.id}`, "PATCH", {name: editName.value.trim()});
+    await refresh();
+    editDialog.close();
+    toast("Board updated.");
+  } catch (error) { editForm.querySelector(".form-status").textContent = error.message; }
+  finally {
+    delete editDialog.dataset.busy;
+    button.querySelector("img").hidden = true;
+    button.querySelector("span").textContent = "Save";
+    editName.readOnly = false;
+    updateEditBoard();
+  }
+};
+$("#delete-board").onclick = () => {
+  if (!editingBoard || editDialog.dataset.busy === "true") return;
+  const boardId = editingBoard.id;
+  confirmDelete("This board and its saved designs will be permanently deleted. This can’t be undone.", async () => {
+    await api(`boards/${boardId}`, "DELETE", {});
+    selectedBoard = null;
+    editDialog.close();
+  }, "Delete board?", "Keep board");
+};
+function confirmDelete(description, action, title = "Delete image?", cancel = "Cancel") {
+  $("#confirm-title").textContent = title;
+  $("#cancel-delete").textContent = cancel;
   pendingDelete = action;
   $("#confirm-description").textContent = description;
   $("#confirm-dialog .form-status").textContent = "";
@@ -731,10 +779,12 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     <div class="detail-layout">
       <div class="detail-toolbar">
         <button id="close-preview" class="preview-control preview-icon" type="button" aria-label="Close preview">${icon("close")}</button>
-        ${design.source ? `<a class="preview-control preview-icon" href="${escapeHTML(design.source)}" target="_blank" rel="noopener noreferrer" aria-label="Open original X post"><img src="/assets/workspace-x.svg" alt="" /></a>` : ""}
+        ${design.source ? `<a class="preview-control source-post" href="${escapeHTML(design.source)}" target="_blank" rel="noopener noreferrer" aria-label="View post"><img src="/assets/workspace-x.svg" alt="" />View post</a>` : ""}
       </div>
       <div class="detail-stage">
-        <img class="detail-image" src="${escapeHTML(design.thumbnail_url)}" width="${design.width}" height="${design.height}" style="--image-ratio: ${design.width / design.height}" alt="${escapeHTML(design.title)}" decoding="async" fetchpriority="high" />
+        <div class="detail-image-slot loading" style="--image-ratio:${design.width / design.height}">
+          <img class="detail-image" src="${escapeHTML(mediaURL(design.thumbnail_url))}" width="${design.width}" height="${design.height}" alt="${escapeHTML(design.title)}" decoding="async" fetchpriority="high" />
+        </div>
         <nav class="detail-navigation" aria-label="Browse designs">
           <button id="previous-design" class="preview-control" type="button"${index === 0 ? " disabled" : ""}>${icon("previous")} Previous</button>
           <button id="next-design" class="preview-control" type="button"${index === ids.length - 1 ? " disabled" : ""}>Next ${icon("next")}</button>
@@ -744,7 +794,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
         <div class="detail-metadata">
           <h2 id="detail-title" title="${escapeHTML(design.title)}">${escapeHTML(design.title)}</h2>
           ${creator ? `<div class="detail-author">${design.creator_avatar_url
-            ? `<img src="${escapeHTML(design.creator_avatar_url)}" width="28" height="28" alt="" />`
+            ? `<img src="${escapeHTML(mediaURL(design.creator_avatar_url))}" width="28" height="28" alt="" />`
             : `<span class="creator-initial" aria-hidden="true">${escapeHTML(creator[0].toUpperCase())}</span>`}
             <span>${escapeHTML(creator)}</span></div>` : ""}
           ${design.notes ? `<p class="detail-notes">${escapeHTML(design.notes)}</p>` : ""}
@@ -756,7 +806,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
             <div class="board-picker-panel">
               <h3>Select board</h3>
               <div class="board-options" role="group" aria-label="Select board"></div>
-              <div class="board-picker-footer"><button type="button" class="board-create"><span aria-hidden="true">+</span>Create new board</button></div>
+              <div class="board-picker-footer"><button type="button" class="board-create"><img src="/assets/board-add.svg" width="16" height="16" alt="" />Create new board</button></div>
             </div>
           </details>
           <button id="remove-design" class="preview-control preview-icon" type="button" aria-label="Delete design">${icon("delete")}</button>
@@ -766,25 +816,29 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     </div>`;
 
   const previewImage = $(".detail-image");
+  const previewSlot = $(".detail-image-slot");
+  const revealPreview = () => previewSlot.classList.remove("loading");
+  previewImage.addEventListener("load", revealPreview, { once: true });
+  if (previewImage.complete && previewImage.naturalWidth) revealPreview();
   const sharpPreview = new Image();
   sharpPreview.decoding = "async";
   sharpPreview.fetchPriority = "high";
   sharpPreview.onload = () => {
-    if (previewImage.isConnected) previewImage.src = sharpPreview.src;
+    if (previewImage.isConnected) {
+      previewImage.src = sharpPreview.src;
+      revealPreview();
+    }
   };
   sharpPreview.onerror = () => {
-    if (previewImage.isConnected) previewImage.src = design.url;
+    const local = `/previews/${encodeURIComponent(design.id)}.webp`;
+    if (sharpPreview.src !== new URL(local, location.href).href) {
+      sharpPreview.src = local;
+    } else if (previewImage.isConnected) previewImage.src = design.url;
   };
-  sharpPreview.src = `/previews/${encodeURIComponent(design.id)}.webp`;
+  sharpPreview.src = mediaURL(`/previews/${encodeURIComponent(design.id)}.webp`);
 
-  const picker = $(".board-picker");
-  const options = $(".board-options");
-  const clearBoardHover = followHover(
-    picker.querySelector(".board-picker-panel"), ".board-options label, .board-create",
-  );
-  picker.addEventListener("toggle", () => {
-    if (!picker.open) clearBoardHover();
-  });
+  const picker = dialog.querySelector(".board-picker");
+  const options = picker.querySelector(".board-options");
   const summary = picker.querySelector("summary");
   const panel = picker.querySelector(".board-picker-panel");
   const pickerHeading = panel.querySelector("h3");
@@ -809,9 +863,9 @@ function openDetail(ids, index, focusTarget = "close-preview") {
       return;
     }
     pickerMotion = panel.animate([
-      { opacity: 0, transform: "translateY(-8px) scale(.98, .92)" },
+      { opacity: 0, transform: "translateY(-3px)" },
       { opacity: 1, transform: "none" },
-    ], { duration: 230, easing: "cubic-bezier(.25,.65,.3,1)", fill: "both" });
+    ], { duration: 160, easing: "ease-out", fill: "both" });
     pickerMotion.onfinish = () => {
       if (!pickerExpanded) {
         picker.open = false;
@@ -838,7 +892,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     drawer.className = "board-drawer";
     drawer.setAttribute("aria-labelledby", "board-drawer-title");
     pickerHeading.id = "board-drawer-title";
-    pickerHeading.textContent = "Create new board";
+    pickerHeading.textContent = "Select board";
     const close = document.createElement("button");
     close.type = "button";
     close.className = "board-drawer-close";
@@ -863,7 +917,6 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     drawer.addEventListener("close", () => {
       if (activeDrawer === drawer) activeDrawer = null;
       if (document.activeElement === summary) dialog.focus({ preventScroll: true });
-      clearBoardHover();
       pickerHeading.removeAttribute("id");
       pickerHeading.textContent = "Select board";
       picker.append(panel);
@@ -929,7 +982,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     else boards.delete(target.value);
     void saveBoards([...boards], target.value);
   };
-  $(".board-create").onclick = () => openBoard(({ id: boardId }) => {
+  panel.querySelector(".board-create").onclick = () => openBoard(({ id: boardId }) => {
     renderBoards();
     void saveBoards([...design.boards, boardId], boardId);
   });
@@ -955,21 +1008,14 @@ function openDetail(ids, index, focusTarget = "close-preview") {
   $("#previous-design").onclick = () => navigate(-1, "previous-design");
   $("#next-design").onclick = () => navigate(1, "next-design");
   $("#copy-design").onclick = async () => {
-    const image = dialog.querySelector(".detail-image");
     try {
       if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
         throw new Error("Image clipboard is unavailable.");
       }
-      const png = image.decode().then(() => new Promise((resolve, reject) => {
-        const canvas = document.createElement("canvas");
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        canvas.getContext("2d").drawImage(image, 0, 0);
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error("Could not encode the image."));
-        }, "image/png");
-      }));
+      const png = fetch(design.url).then((response) => {
+        if (!response.ok) throw new Error("Could not download the original image.");
+        return response.blob();
+      });
       await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
       toast("Image copied.");
     } catch {
@@ -991,6 +1037,9 @@ function openDetail(ids, index, focusTarget = "close-preview") {
   (focus.disabled ? $("#close-preview") : focus).focus();
 }
 async function init() {
+  let returning = false;
+  try { returning = localStorage.getItem("pluck-session-hint") === "1"; } catch {}
+  showScreen(returning ? "workspace" : "auth-screen");
   const emailToken = new URLSearchParams(location.hash.slice(1)).get("email-token");
   if (emailToken) {
     history.replaceState(null, "", "/#auth");
