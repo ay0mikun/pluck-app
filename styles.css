@@ -571,13 +571,16 @@ textarea {
   overflow: hidden;
 }
 .image-slot img {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   opacity: 0;
   transition: opacity 180ms ease;
 }
+.design-card:has(.extreme-label) .image-slot img { object-fit: contain; }
 .design-card.loaded .image-slot img {
   opacity: 1;
 }
@@ -899,10 +902,12 @@ dialog:hover > .close {
   background: #262626;
 }
 .detail-image {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   opacity: 1;
   transition: opacity 180ms ease;
 }
@@ -1259,13 +1264,13 @@ dialog:hover > .close {
   }
   .workspace {
     --workspace-gutter: 16px;
-    --workspace-nav-height: 64px;
+    --workspace-nav-height: 58px;
   }
   .workspace-nav {
     padding-block: 12px;
   }
   .workspace-nav nav {
-    height: 40px;
+    height: 34px;
   }
   .workspace-nav #paste-link,
   .workspace-nav .avatar-button,
@@ -1274,7 +1279,7 @@ dialog:hover > .close {
   }
   .workspace-nav .avatar-button,
   .workspace-nav .avatar-button img {
-    width: 40px;
+    width: 34px;
   }
   .account-menu {
     inset: 60px 16px auto auto;
@@ -1455,7 +1460,6 @@ dialog,
     padding: 16px;
   }
   .detail-image-slot {
-    max-height: 100%;
     min-height: 0;
     border-radius: 8px;
   }
@@ -1544,8 +1548,14 @@ dialog,
 #toast img { flex: none; }
 @media (max-width: 700px) {
   .edit-board-actions .button, #delete-board { height: 40px; }
-  .gallery-meta { gap: 12px; }
-  #item-count { font-size: 16px; }
+  .gallery-content { padding-block: 4px 18.5px; }
+  .gallery-meta { gap: 12px; min-height: 0; margin-bottom: 16px; letter-spacing: -.225px; }
+  #item-count { font-size: 15px; }
+  .gallery-content:has(#empty-state:not([hidden])) .gallery-meta { margin-bottom: 0; }
+  .empty-state { padding-block: 200px 0; }
+  .gallery-content:has(#item-count:empty) { padding-top: 200px; }
+  .gallery-meta:has(#item-count:empty) { display: none; }
+  .gallery-meta:has(#item-count:empty) ~ .empty-state { padding-top: 0; }
   .detail-image-slot { border-radius: 6px; }
   .board-drawer .board-picker-panel { background: transparent; }
 }
