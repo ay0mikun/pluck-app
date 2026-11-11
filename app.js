@@ -773,7 +773,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     <div class="detail-layout">
       <div class="detail-toolbar">
         <button id="close-preview" class="preview-control preview-icon" type="button" aria-label="Close preview">${icon("close")}</button>
-        ${design.source ? `<a class="preview-control source-post" href="${escapeHTML(design.source)}" target="_blank" rel="noopener noreferrer" aria-label="See X post"><img src="/assets/workspace-x.svg" alt="" />See X post</a>` : ""}
+        ${design.source ? `<a class="preview-control source-post" href="${escapeHTML(design.source)}" target="_blank" rel="noopener noreferrer" aria-label="View post"><img src="/assets/workspace-x.svg" alt="" />View post</a>` : ""}
       </div>
       <div class="detail-stage">
         <div class="detail-image-slot loading" style="--image-ratio:${design.width / design.height}">
