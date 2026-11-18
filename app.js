@@ -159,13 +159,52 @@ function useTouchFocus() {
   return touchInput.matches && !("keyboard" in document.documentElement.dataset);
 }
 
+// Remember the actual opener before native dialog focus moves inside the panel.
+let uiTrigger;
+document.addEventListener("click", (event) => {
+  uiTrigger = event.target.closest("button, summary, a, .design-card");
+}, true);
+
+function createPickerMotion(picker, panel) {
+  let expanded = false;
+  let motion;
+  return (next, immediate = false) => {
+    if (next === expanded && !immediate) return;
+    expanded = next;
+    picker.toggleAttribute("data-expanded", next);
+    panel.inert = !next;
+    const visible = picker.open;
+    const current = visible ? getComputedStyle(panel) : null;
+    const from = current ? { opacity: current.opacity, transform: current.transform } :
+      { opacity: 0, transform: "translateY(-4px) scale(.98)" };
+    motion?.cancel();
+    if (reducedMotion.matches || immediate) { picker.open = next; motion = null; return; }
+    picker.open = true;
+    motion = panel.animate([from, next ?
+      { opacity: 1, transform: "none" } :
+      { opacity: 0, transform: "translateY(-4px) scale(.98)" }],
+      { duration: 160, easing: "cubic-bezier(.2,.8,.2,1)", fill: "both" });
+    motion.onfinish = () => {
+      picker.open = expanded;
+      motion.cancel();
+      motion = null;
+    };
+  };
+}
+
 function openDialog(dialog) {
   stopWheelScroll();
   dialog.classList.remove("closing");
+  const opener = uiTrigger?.isConnected ? uiTrigger : document.activeElement;
+  const triggerBounds = opener?.getBoundingClientRect();
   const touch = useTouchFocus();
   if (touch) dialog.setAttribute("autofocus", "");
   try {
     dialog.showModal();
+    if (triggerBounds && triggerBounds.width) {
+      const bounds = dialog.getBoundingClientRect();
+      dialog.style.transformOrigin = `${triggerBounds.left + triggerBounds.width / 2 - bounds.left}px ${triggerBounds.top + triggerBounds.height / 2 - bounds.top}px`;
+    }
   } finally {
     if (touch) dialog.removeAttribute("autofocus");
   }
@@ -533,8 +572,9 @@ function renderImportBoards() {
   panel.querySelector(".board-options").innerHTML = state.boards.map(({id, name}) => `<label><input type="radio" name="import-board" value="${escapeHTML(id)}"${id === importBoard ? " checked" : ""} /><span>${escapeHTML(name)}</span></label>`).join("");
   panel.querySelector(".board-options").hidden = !state.boards.length;
 }
+const setImportPickerOpen = createPickerMotion(importPicker, importPicker.querySelector(".board-picker-panel"));
 function closeImportPicker() {
-  importPicker.open = false;
+  setImportPickerOpen(false);
   if (importDrawer?.open) closeDialog(importDrawer);
   if (importPicker.contains(document.activeElement)) importDialog.focus({ preventScroll: true });
 }
@@ -546,10 +586,16 @@ importPicker.addEventListener("change", ({ target }) => {
 });
 importPicker.querySelector("summary").onclick = (event) => {
   if (importDialog.dataset.busy === "true") { event.preventDefault(); return; }
-  if (!matchMedia("(max-width: 700px)").matches) return;
+  if (!matchMedia("(max-width: 700px)").matches) {
+    event.preventDefault();
+    setImportPickerOpen(!importPicker.hasAttribute("data-expanded"));
+    return;
+  }
   event.preventDefault();
   if (importDrawer?.open) return;
+  setImportPickerOpen(false, true);
   const panel = importPicker.querySelector(".board-picker-panel");
+  panel.inert = false;
   const drawer = document.createElement("dialog");
   importDrawer = drawer;
   drawer.className = "board-drawer import-board-drawer";
@@ -770,6 +816,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
   const id = ids[index];
   const design = state.designs.find((item) => item.id === id);
   const dialog = $("#detail-dialog");
+  dialog.toggleAttribute("data-navigating", dialog.open);
   const creator = (design.creator || "").replace(/^@/, "");
   const icon = (name) =>
     `<img src="/assets/preview-${name}.svg" width="16" height="16" alt="" />`;
@@ -842,47 +889,15 @@ function openDetail(ids, index, focusTarget = "close-preview") {
   const panel = picker.querySelector(".board-picker-panel");
   const pickerHeading = panel.querySelector("h3");
   let activeDrawer;
-  let pickerMotion;
-  let pickerExpanded = false;
-
-  function setPickerOpen(expanded) {
-    if (expanded === pickerExpanded) return;
-    pickerExpanded = expanded;
-    picker.toggleAttribute("data-expanded", expanded);
-    panel.inert = !expanded;
-    if (reducedMotion.matches) {
-      pickerMotion?.cancel();
-      pickerMotion = null;
-      picker.open = expanded;
-      return;
-    }
-    if (expanded) picker.open = true;
-    if (pickerMotion) {
-      pickerMotion.reverse();
-      return;
-    }
-    pickerMotion = panel.animate([
-      { opacity: 0, transform: "translateY(-3px)" },
-      { opacity: 1, transform: "none" },
-    ], { duration: 160, easing: "ease-out", fill: "both" });
-    pickerMotion.onfinish = () => {
-      if (!pickerExpanded) {
-        picker.open = false;
-        pickerMotion.cancel();
-        pickerMotion = null;
-      }
-    };
-  }
+  const setPickerOpen = createPickerMotion(picker, panel);
 
   summary.addEventListener("click", (event) => {
     event.preventDefault();
     if (!matchMedia("(max-width: 999px)").matches) {
-      setPickerOpen(!pickerExpanded);
+      setPickerOpen(!picker.hasAttribute("data-expanded"));
       return;
     }
-    pickerMotion?.cancel();
-    pickerMotion = null;
-    pickerExpanded = false;
+    setPickerOpen(false, true);
     picker.open = false;
     picker.removeAttribute("data-expanded");
     panel.inert = false;
@@ -967,7 +982,7 @@ function openDetail(ids, index, focusTarget = "close-preview") {
       if (dialog.open && picker.isConnected) {
         const restoreFocus = picker.contains(document.activeElement) || document.activeElement === dialog;
         renderBoards();
-        if (pickerExpanded && restoreFocus && !useTouchFocus()) {
+        if (picker.hasAttribute("data-expanded") && restoreFocus && !useTouchFocus()) {
           [...options.querySelectorAll("input")].find((input) => input.value === boardId)?.focus();
         }
       }
@@ -989,8 +1004,38 @@ function openDetail(ids, index, focusTarget = "close-preview") {
   function navigate(step, button) {
     if (!saving && ids[index + step]) openDetail(ids, index + step, button);
   }
+  // Only claim deliberate horizontal, single-finger gestures on the image stage.
+  const stage = dialog.querySelector(".detail-stage");
+  let swipe;
+  dialog.onpointerdown = () => { delete dialog.dataset.swipeClick; };
+  stage.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "touch" || !event.isPrimary || !matchMedia("(max-width: 999px)").matches) {
+      swipe = null;
+      return;
+    }
+    swipe = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  });
+  stage.addEventListener("pointercancel", () => { swipe = null; });
+  stage.addEventListener("pointerleave", () => { swipe = null; });
+  stage.addEventListener("pointerup", (event) => {
+    if (!swipe || event.pointerId !== swipe.id) return;
+    const dx = event.clientX - swipe.x;
+    const dy = event.clientY - swipe.y;
+    swipe = null;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5 || saving) return;
+    dialog.dataset.swipeClick = "true";
+    const step = dx < 0 ? 1 : -1;
+    if (!ids[index + step]) return;
+    openDetail(ids, index + step);
+    if (!reducedMotion.matches) {
+      dialog.querySelector(".detail-stage").animate([
+        { opacity: .65, transform: `translateX(${step * 24}px)` },
+        { opacity: 1, transform: "none" },
+      ], { duration: 200, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }
+  });
   dialog.onkeydown = (event) => {
-    if (event.key === "Escape" && pickerExpanded) {
+    if (event.key === "Escape" && picker.hasAttribute("data-expanded")) {
       event.preventDefault();
       setPickerOpen(false);
       summary.focus();
@@ -1000,6 +1045,10 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     }
   };
   dialog.onclick = (event) => {
+    if (dialog.dataset.swipeClick) {
+      delete dialog.dataset.swipeClick;
+      return;
+    }
     if (!picker.contains(event.target)) setPickerOpen(false);
     if (event.target.classList.contains("detail-stage")) closeDialog(dialog);
   };

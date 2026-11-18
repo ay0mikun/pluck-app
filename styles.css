@@ -706,7 +706,7 @@ textarea {
   text-align: left;
   text-decoration: none;
 }
-.menu-button:hover:not(:disabled) { background: #212121; }
+.menu-button:hover:not(:disabled) { --row-fill: #212121; }
 .account-upload { justify-content: space-between; }
 .account-upload:disabled { opacity: 1; cursor: default; }
 .account-upload > span:first-child { opacity: .4; }
@@ -719,8 +719,8 @@ textarea {
   line-height: 12px;
   letter-spacing: -.15px;
 }
-#logout { background: #ff383c24; color: #ff383c; }
-#logout:hover { background: #ff383c38; }
+#logout { --row-fill: #ff383c24; color: #ff383c; }
+#logout:hover { --row-fill: #ff383c38; }
 #logout > img { flex: none; }
 .add-board { width: 32px; padding: 0; font-size: 20px; }
 dialog {
@@ -1014,6 +1014,7 @@ dialog:hover > .close {
 .board-picker-panel {
   position: relative;
   isolation: isolate;
+  transform-origin: top right;
   width: min(242px, 100%);
   margin-top: 6px;
   overflow: hidden;
@@ -1088,11 +1089,11 @@ dialog:hover > .close {
 .board-create:focus-visible {
   color: #fefefe;
 }
-.board-options label:has(input:focus-visible) { background: #242424; }
-.board-create:focus-visible { background: #212121; }
+.board-options label:has(input:focus-visible) { --row-fill: #242424; }
+.board-create:focus-visible { --row-fill: #212121; }
 @media (hover: hover) and (pointer: fine) {
-  .board-options label:hover { background: #242424; }
-  .board-create:hover { background: #212121; }
+  .board-options label:hover { --row-fill: #242424; }
+  .board-create:hover { --row-fill: #212121; }
 }
 .board-create {
   width: 100%;
@@ -1379,12 +1380,6 @@ dialog,
   border: 0;
   box-shadow: none;
 }
-@media (prefers-reduced-motion: no-preference) {
-  .board-drawer.closing { transform: translateY(6px); }
-  @starting-style {
-    .board-drawer[open] { transform: translateY(12px); }
-  }
-}
 .board-drawer h3 {
   padding: 16px 56px 16px 16px;
   font-size: 16px;
@@ -1398,7 +1393,7 @@ dialog,
   gap: 10px;
   font-size: 16px;
 }
-.board-drawer .board-options label + label { margin-top: 4px; }
+
 .board-drawer .board-create { height: 40px; }
 .board-drawer-close {
   position: absolute;
@@ -1417,7 +1412,7 @@ dialog,
   color: #b1b0ae;
   font: 400 16px/normal Geist, sans-serif;
 }
-.account-drawer .account-options { display: grid; gap: 4px; }
+.account-drawer .account-options { display: grid; gap: 0; }
 .account-drawer .menu-button { height: 40px; }
 .account-drawer .account-footer { padding: 16px; border: 0; }
 .account-drawer #logout { justify-content: center; gap: 6px; font-size: 14px; }
@@ -1478,7 +1473,7 @@ dialog,
 
 @media (max-width: 700px) {
   .account-menu .menu-button { height: 40px; }
-  .account-options { display: grid; gap: 4px; }
+  .account-options { display: grid; gap: 0; }
   #board-form .primary { height: 40px; }
   .delete-dialog .button { flex: 1; height: 40px; }
 }
@@ -1548,8 +1543,8 @@ dialog,
 #toast img { flex: none; }
 @media (max-width: 700px) {
   .edit-board-actions .button, #delete-board { height: 40px; }
-  .gallery-content { padding-block: 4px 18.5px; }
-  .gallery-meta { gap: 12px; min-height: 0; margin-bottom: 16px; letter-spacing: -.225px; }
+  .gallery-content { padding-block: 8px 18.5px; }
+  .gallery-meta { gap: 12px; min-height: 0; margin-bottom: 20px; letter-spacing: -.225px; }
   #item-count { font-size: 15px; }
   .gallery-content:has(#empty-state:not([hidden])) .gallery-meta { margin-bottom: 0; }
   .empty-state { padding-block: 200px 0; }
@@ -1563,4 +1558,59 @@ dialog,
 .board-create img { flex: none; }
 @media (max-width: 700px) {
   #edit-board-dialog .import-header { padding: 20px 16px; }
+}
+
+/* Anchored menus emerge from their opener; hover feedback stays in place. */
+.account-menu {
+  transform-origin: top right;
+  opacity: 0;
+  transform: translateY(-4px) scale(.98);
+  transition: opacity 160ms ease, transform 160ms cubic-bezier(.2,.8,.2,1),
+    display 160ms allow-discrete, overlay 160ms allow-discrete;
+}
+.account-menu:popover-open { opacity: 1; transform: none; }
+@starting-style {
+  .account-menu:popover-open { opacity: 0; transform: translateY(-4px) scale(.98); }
+}
+.menu-button { transition: color 150ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .account-menu, .account-menu:popover-open { transform: none; }
+}
+
+@media (min-width: 1000px) and (prefers-reduced-motion: no-preference) {
+  .detail-dialog .detail-info,
+  .detail-dialog .detail-toolbar {
+    transform: translateX(100%);
+    transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+  }
+  .detail-dialog[open] .detail-info,
+  .detail-dialog[open] .detail-toolbar { transform: none; }
+  .detail-dialog.closing .detail-info,
+  .detail-dialog.closing .detail-toolbar {
+    transform: translateX(100%);
+    transition-duration: 140ms;
+  }
+  @starting-style {
+    .detail-dialog[open]:not([data-navigating]) .detail-info,
+    .detail-dialog[open]:not([data-navigating]) .detail-toolbar { transform: translateX(100%); }
+  }
+}
+
+@media (max-width: 999px) {
+  .detail-stage { touch-action: pan-y pinch-zoom; }
+}
+
+/* Continuous row hit areas; only the visual hover fill has spacing. */
+.menu-button,
+.board-options label,
+.board-create { position: relative; isolation: isolate; }
+:is(.menu-button, .board-options label, .board-create)::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 2px 0;
+  border-radius: inherit;
+  background: var(--row-fill, transparent);
+  pointer-events: none;
+  transition: background-color 150ms ease;
 }
