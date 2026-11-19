@@ -1623,3 +1623,10 @@ dialog,
 @starting-style {
   .detail-dialog[open] { transform: none; }
 }
+
+/* Keep the shared image visible while the surrounding preview leaves. */
+.detail-dialog.returning { opacity: 1; background: transparent; }
+.detail-dialog.returning :is(.detail-info, .detail-toolbar, .detail-navigation) {
+  opacity: 0;
+  transition: opacity 140ms ease, transform 220ms cubic-bezier(.2,.8,.2,1);
+}

@@ -210,7 +210,29 @@ function openDialog(dialog) {
   }
 }
 function closeDialog(dialog) {
-  if (dialog.dataset.busy === "true") return;
+  if (dialog.dataset.busy === "true" || dialog.classList.contains("closing")) return;
+  if (dialog.id === "detail-dialog" && !reducedMotion.matches) {
+    const tile = [...document.querySelectorAll("#design-grid [data-design]")]
+      .find((card) => card.dataset.design === dialog.dataset.design);
+    const image = dialog.querySelector(".detail-image-slot");
+    const target = tile?.querySelector(".image-slot")?.getBoundingClientRect();
+    if (image && target?.width && target.height && target.bottom > 0 && target.top < innerHeight) {
+      const from = getComputedStyle(image).transform;
+      image.getAnimations().forEach((animation) => animation.cancel());
+      const bounds = image.getBoundingClientRect();
+      dialog.classList.add("closing", "returning");
+      const motion = image.animate([
+        { transform: from },
+        { transform: `translate(${target.left - bounds.left}px, ${target.top - bounds.top}px) scale(${target.width / bounds.width}, ${target.height / bounds.height})` },
+      ], { duration: 300, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards" });
+      motion.finished.then(() => {
+        dialog.close();
+        dialog.classList.remove("closing", "returning");
+        motion.cancel();
+      }).catch(() => {});
+      return;
+    }
+  }
   if (reducedMotion.matches || ("keyboard" in document.documentElement.dataset && !dialog.matches(".board-drawer"))) {
     dialog.close();
     return;
@@ -816,6 +838,7 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
   const id = ids[index];
   const design = state.designs.find((item) => item.id === id);
   const dialog = $("#detail-dialog");
+  dialog.dataset.design = id;
   dialog.toggleAttribute("data-navigating", dialog.open);
   const creator = (design.creator || "").replace(/^@/, "");
   const icon = (name) =>
