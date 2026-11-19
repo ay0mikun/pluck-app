@@ -13,8 +13,7 @@ let user = null,
   onBoardCreated = null,
   pendingDelete;
 let currentScreen = null,
-  galleryFrame,
-  toastTimer;
+  galleryFrame;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const mediaURL = (path) => state.media_urls?.[path] || path;
 const imageObserver = new IntersectionObserver((entries) => {
@@ -87,21 +86,102 @@ async function api(path, method = "GET", data) {
     throw new Error(result.error || "Something went wrong. Try again.");
   return result;
 }
-function toast(message) {
-  const node = $("#toast");
-  node.replaceChildren();
-  const icon = document.createElement("img");
-  icon.src = "/assets/toast-success.svg";
-  icon.width = icon.height = 18;
-  icon.alt = "";
-  node.append(icon, document.createTextNode(message));
-  if (node.matches(":popover-open")) node.hidePopover();
-  const dialogs = [...document.querySelectorAll("dialog:modal")];
-  (dialogs.at(-1) || document.body).append(node);
-  node.showPopover();
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => node.hidePopover(), 4000);
+const toastViewport = $("#toast");
+const notifications = new Map();
+let toastReturnFocus;
+function positionToasts() {
+  let offset = 0;
+  [...toastViewport.children].reverse().forEach((card, index) => {
+    card.style.setProperty("--toast-index", index);
+    card.style.setProperty("--toast-offset", `${offset}px`);
+    offset += card.offsetHeight + 8;
+  });
+  toastViewport.style.height = `${Math.max(0, offset - 8)}px`;
 }
+function mountToasts() {
+  if (!notifications.size) return;
+  const parent = [...document.querySelectorAll("dialog:modal")].at(-1) || document.body;
+  if (toastViewport.parentElement !== parent) {
+    if (toastViewport.matches(":popover-open")) toastViewport.hidePopover();
+    parent.append(toastViewport);
+  }
+  if (!toastViewport.matches(":popover-open")) toastViewport.showPopover();
+}
+function pauseToasts() {
+  for (const entry of notifications.values()) {
+    if (!entry.timer) continue;
+    clearTimeout(entry.timer);
+    entry.timer = null;
+    entry.remaining -= performance.now() - entry.started;
+  }
+}
+function resumeToasts() {
+  if (document.hidden || toastViewport.matches(":hover, :focus-within")) return;
+  for (const entry of notifications.values()) {
+    if (entry.timer) continue;
+    entry.started = performance.now();
+    entry.timer = setTimeout(entry.dismiss, Math.max(0, entry.remaining));
+  }
+}
+function toast(message, type = "success") {
+  const card = document.createElement("div");
+  card.className = "toast-card";
+  card.setAttribute("role", type === "error" ? "alert" : "status");
+  const icon = type === "error" ? '<span class="toast-error" aria-hidden="true">!</span>' : '<img src="/assets/toast-success.svg" width="18" height="18" alt="" />';
+  card.innerHTML = `${icon}<div class="toast-copy">${escapeHTML(message)}</div><button class="toast-close" type="button" aria-label="Dismiss notification">×</button>`;
+  const entry = { remaining: 5000, timer: null, started: 0, dismiss };
+  function dismiss() {
+    if (!notifications.has(card)) return;
+    clearTimeout(entry.timer);
+    notifications.delete(card);
+    card.classList.add("toast-leaving");
+    setTimeout(() => {
+      card.remove();
+      positionToasts();
+      if (!notifications.size) toastViewport.hidePopover();
+    }, reducedMotion.matches ? 0 : 160);
+  }
+  card.querySelector("button").onclick = dismiss;
+  let swipeStart;
+  card.onpointerdown = (event) => {
+    if (event.target.closest("button") || !event.isPrimary) return;
+    swipeStart = event.clientX;
+    card.setPointerCapture(event.pointerId);
+  };
+  card.onpointerup = (event) => {
+    if (swipeStart !== undefined && Math.abs(event.clientX - swipeStart) > 60) dismiss();
+    swipeStart = undefined;
+  };
+  card.onpointercancel = () => { swipeStart = undefined; };
+  notifications.set(card, entry);
+  toastViewport.append(card);
+  if (notifications.size > 3) notifications.values().next().value.dismiss();
+  mountToasts();
+  positionToasts();
+  resumeToasts();
+}
+toastViewport.addEventListener("pointerenter", pauseToasts);
+toastViewport.addEventListener("pointerleave", resumeToasts);
+toastViewport.addEventListener("focusin", pauseToasts);
+toastViewport.addEventListener("focusout", () => queueMicrotask(resumeToasts));
+toastViewport.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  event.preventDefault();
+  event.stopPropagation();
+  notifications.get(event.target.closest(".toast-card"))?.dismiss();
+  toastReturnFocus?.focus({ preventScroll: true });
+});
+document.addEventListener("visibilitychange", () => document.hidden ? pauseToasts() : resumeToasts());
+document.addEventListener("close", () => queueMicrotask(mountToasts), true);
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "F6" || !notifications.size) return;
+  event.preventDefault();
+  if (toastViewport.contains(document.activeElement)) toastReturnFocus?.focus({ preventScroll: true });
+  else {
+    toastReturnFocus = document.activeElement;
+    toastViewport.lastElementChild?.querySelector("button").focus({ preventScroll: true });
+  }
+});
 function showScreen(id) {
   document.documentElement.classList.remove("app-starting");
   const previous = currentScreen;
@@ -137,7 +217,7 @@ async function route() {
     try {
       await refresh();
     } catch (e) {
-      toast(e.message);
+      toast(e.message, "error");
     }
     return;
   }
@@ -146,13 +226,34 @@ async function route() {
   showScreen("auth-screen");
 }
 window.addEventListener("hashchange", route);
+let libraryReady = false;
+function libraryLoading(loading, failed = false) {
+  const workspace = $("#workspace");
+  workspace.toggleAttribute("data-loading", loading);
+  workspace.setAttribute("aria-busy", String(loading && !failed));
+  $("#paste-link").disabled = loading;
+  $("#account-button").disabled = loading;
+  $("#library-skeleton").hidden = failed;
+  $("#library-load-error").hidden = !failed;
+  $("#library-loading-status").textContent = loading && !failed ? "Loading your library…" : "";
+}
+$("#retry-library").onclick = () => refresh().catch(() => {});
 async function refresh() {
-  state = await api("state");
-  user = state.user;
-  try { localStorage.setItem("pluck-session-hint", "1"); } catch {}
-  renderAccount();
-  if (!state.boards.some((board) => board.id === selectedBoard)) selectedBoard = null;
-  render();
+  if (!libraryReady) libraryLoading(true);
+  try {
+    state = await api("state");
+    user = state.user;
+    try { localStorage.setItem("pluck-session-hint", "1"); } catch {}
+    renderAccount();
+    if (!state.boards.some((board) => board.id === selectedBoard)) selectedBoard = null;
+    render();
+    libraryReady = true;
+    libraryLoading(false);
+    scheduleGalleryLayout();
+  } catch (error) {
+    if (!libraryReady) libraryLoading(true, true);
+    throw error;
+  }
 }
 const touchInput = matchMedia("(pointer: coarse)");
 function useTouchFocus() {
@@ -282,7 +383,7 @@ async function submitting(form, action) {
     if (status) status.textContent = "";
   } catch (e) {
     if (status) status.textContent = e.message;
-    else toast(e.message);
+    else toast(e.message, "error");
   } finally {
     button.disabled = false;
     button.removeAttribute("aria-busy");
@@ -355,6 +456,8 @@ $("#logout").onclick = async () => {
   try {
     await api("auth/logout", "POST", {});
     user = null;
+    libraryReady = false;
+    libraryLoading(true);
     state = { boards: [], designs: [] };
     selectedBoard = null;
     render();
@@ -362,7 +465,7 @@ $("#logout").onclick = async () => {
     if ($("#account-drawer").open) $("#account-drawer").close();
     location.hash = "auth";
   } catch (e) {
-    toast(e.message);
+    toast(e.message, "error");
   }
 };
 $("#account-menu").addEventListener("toggle", (e) =>
@@ -1003,7 +1106,7 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
         dialog.focus({ preventScroll: true });
       }
     } catch (error) {
-      toast(error.message);
+      toast(error.message, "error");
     } finally {
       controls.forEach((control) => { control.disabled = false; });
       saving = false;
@@ -1095,7 +1198,7 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
       await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
       toast("Image copied.");
     } catch {
-      toast("Could not copy the image.");
+      toast("Could not copy the image.", "error");
     }
   };
   $("#remove-design").onclick = () =>
@@ -1124,6 +1227,7 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
   (focus.disabled ? $("#close-preview") : focus).focus();
 }
 async function init() {
+  libraryLoading(true);
   let returning = false;
   try { returning = localStorage.getItem("pluck-session-hint") === "1"; } catch {}
   showScreen(returning ? "workspace" : "auth-screen");

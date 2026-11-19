@@ -82,6 +82,8 @@
     <section
       id="workspace"
       class="screen workspace"
+      data-loading
+      aria-busy="true"
       hidden
       data-node-id="34:1346"
     >
@@ -116,6 +118,20 @@
         </div>
       </div>
       <dialog id="account-drawer" class="board-drawer account-drawer" aria-label="Account menu"></dialog>
+      <div class="library-loading">
+        <p class="sr-only" role="status" id="library-loading-status">Loading your library…</p>
+        <div id="library-skeleton" aria-hidden="true">
+          <div class="skeleton-filters"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
+          <div class="skeleton-content">
+            <div class="skeleton skeleton-count"></div>
+            <div class="skeleton-grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+          </div>
+        </div>
+        <div id="library-load-error" role="alert" hidden>
+          <p>We couldn’t load your library. Please try again.</p>
+          <button id="retry-library" class="button primary" type="button">Try again</button>
+        </div>
+      </div>
       <nav id="filters" class="filters" aria-label="Boards"></nav>
       <main class="gallery-content">
         <div class="gallery-meta">
@@ -233,6 +249,6 @@
         <p class="form-status" role="status"></p>
       </div>
     </dialog>
-    <div id="toast" role="status" popover="manual"></div>
+    <div id="toast" role="region" aria-label="Notifications" popover="manual"></div>
   </body>
 </html>

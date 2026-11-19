@@ -1200,31 +1200,6 @@ dialog:hover > .close {
 .delete-dialog .secondary:hover { background: #292929; }
 .delete-dialog .primary { background: #ff383c24; color: #ff383c; font-weight: 500; }
 .delete-dialog .primary:hover { background: #ff383c38; }
-#toast {
-  position: fixed;
-  inset: auto max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) auto;
-  margin: 0;
-  border: 0;
-  background: #262626;
-  color: #fff;
-  padding: 13px 20px;
-  border-radius: 12px;
-  font-size: 13px;
-  max-width: calc(100% - 32px);
-  width: max-content;
-  z-index: 10;
-  box-shadow: 0 6px 25px #0001;
-  transition:
-    opacity 180ms ease,
-    transform 220ms var(--ease-out),
-    display 220ms allow-discrete;
-}
-@starting-style {
-  #toast {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1538,9 +1513,7 @@ dialog,
 #account-menu #logout { flex-direction: row-reverse; justify-content: flex-end; }
 .account-drawer .account-footer { border-top: 0; }
 .account-menu { border-radius: 18px; }
-#toast { display: none; align-items: center; gap: 10px; background: #131313; border: 1px solid #1e1e1e; padding: 11px 12px; font-size: 14px; width: 361px; box-shadow: 0 0 8px #0004; }
-#toast:popover-open { display: flex; }
-#toast img { flex: none; }
+
 @media (max-width: 700px) {
   .edit-board-actions .button, #delete-board { height: 40px; }
   .gallery-content { padding-block: 8px 18.5px; }
@@ -1630,3 +1603,61 @@ dialog,
   opacity: 0;
   transition: opacity 140ms ease, transform 220ms cubic-bezier(.2,.8,.2,1);
 }
+
+/* Entry skeletons mirror the library without exposing placeholder controls. */
+.library-loading { display: none; }
+.workspace[data-loading] > .library-loading { display: block; }
+.workspace[data-loading] > :is(#filters, .gallery-content) { display: none; }
+.workspace[data-loading] #account-button { pointer-events: none; }
+.skeleton { background: #242424; border-radius: 6px; animation: skeleton-pulse 1.4s ease-in-out infinite alternate; }
+.skeleton-filters { display: flex; align-items: center; gap: 12px; height: 56px; padding-inline: var(--workspace-gutter); }
+.skeleton-filters .skeleton { width: 78px; height: 32px; border-radius: 12px; }
+.skeleton-content { padding: 18.5px var(--workspace-gutter) 40px; }
+.skeleton-count { width: 140px; height: 18px; margin-bottom: 28px; }
+.skeleton-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.skeleton-grid > .skeleton { aspect-ratio: 3 / 4; }
+.skeleton-grid > .skeleton:nth-child(even) { aspect-ratio: 4 / 3; }
+#library-load-error { padding: 40px var(--workspace-gutter); color: #b1b0ae; }
+#library-load-error .button { margin-top: 16px; }
+@media (min-width: 1800px) { .skeleton-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (min-width: 701px) and (max-width: 1100px) { .skeleton-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) {
+  .skeleton-content { padding-block: 8px 18.5px; }
+  .skeleton-count { margin-bottom: 20px; }
+  .skeleton-grid { grid-template-columns: minmax(0, 1fr); }
+  .skeleton-grid > .skeleton:nth-child(n+3) { display: none; }
+}
+
+/* Toast layout follows the reference; colors remain Pluck's existing theme. */
+#toast {
+  position: fixed;
+  inset: auto max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) auto;
+  margin: 0; padding: 0; border: 0; overflow: visible;
+  width: min(361px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
+  background: transparent; color: #fefefe; pointer-events: none;
+}
+.toast-card {
+  position: absolute; bottom: 0; right: 0; width: 100%;
+  display: flex; align-items: center; gap: 10px; padding: 14px 12px;
+  background: #131313; border: 1px solid #1e1e1e; border-radius: 12px;
+  box-shadow: 0 0 8px #0004; font: 400 14px/20px Geist, sans-serif;
+  pointer-events: auto; touch-action: pan-y; transform-origin: bottom center;
+  z-index: calc(4 - var(--toast-index));
+  transform: translateY(calc(var(--toast-index) * -8px)) scale(calc(1 - var(--toast-index) * .04));
+  transition: transform 180ms ease, opacity 160ms ease;
+}
+.toast-card > img, .toast-error { flex: none; }
+.toast-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast-close { flex: none; border: 0; border-radius: 6px; background: transparent; color: #b1b0ae; width: 24px; height: 24px; padding: 0; font-size: 20px; }
+.toast-close:hover { background: #242424; color: #fefefe; }
+.toast-error { display: grid; place-items: center; border: 1px solid #ff7300; color: #ff7300; width: 18px; height: 18px; border-radius: 50%; font-size: 12px; }
+#toast:is(:hover, :focus-within) .toast-card { transform: translateY(calc(-1 * var(--toast-offset))); }
+.toast-card.toast-leaving { opacity: 0; transform: translateY(12px); pointer-events: none; }
+@starting-style { .toast-card { opacity: 0; transform: translateY(12px); } }
+@media (prefers-reduced-motion: reduce) { .toast-card { transition: none; } }
+
+#toast:is(:hover, :focus-within) { pointer-events: auto; }
+
+/* The shared image owns exit timing. Do not retain the closed dialog in the
+   top layer after its final image transform is released. */
+.detail-dialog { transition: opacity 180ms ease; }
