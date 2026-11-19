@@ -108,9 +108,6 @@ nav {
     background-color 150ms ease,
     color 150ms ease;
 }
-.button:active {
-  transform: scale(0.97);
-}
 .primary {
   color: #fefefe;
   background: #262626;
@@ -184,9 +181,6 @@ h1 {
   transition: background-color 160ms ease, color 160ms ease, transform 160ms var(--ease-out);
 }
 
-.auth-button:active {
-  transform: scale(.985);
-}
 
 .auth-provider {
   background: #1f1f1f;
@@ -1683,4 +1677,23 @@ dialog,
 }
 @media (hover: hover) and (pointer: fine) {
   :is(.primary:not(#confirm-delete), .auth-submit):not(:disabled):not([data-muted]):hover { background: #eaeaea; }
+}
+
+/* Tactile feedback is limited to action buttons, never menu/select options. */
+@media (prefers-reduced-motion: no-preference) {
+  :is(button.button, .auth-button, button.preview-control, button.close,
+      .board-drawer-close, .toast-close, #edit-board, #new-board) {
+    transition: scale 160ms cubic-bezier(.2,.8,.2,1), background-color 150ms ease, color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    :is(button.button, .auth-button, button.preview-control, button.close,
+        .board-drawer-close, .toast-close, #edit-board, #new-board):not(:disabled):not([aria-disabled="true"]):not([data-muted]):hover {
+      scale: 1.01 .99;
+    }
+  }
+  :is(button.button, .auth-button, button.preview-control, button.close,
+      .board-drawer-close, .toast-close, #edit-board, #new-board):not(:disabled):not([aria-disabled="true"]):not([data-muted]):active {
+    scale: .98 .96;
+    transition-duration: 90ms;
+  }
 }
