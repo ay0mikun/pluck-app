@@ -25,6 +25,106 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <title>Pluck</title>
     <script>document.documentElement.classList.add("app-starting");</script>
+    <style>
+      #entry-skeleton {
+        display: none;
+      }
+      .app-starting #entry-skeleton {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        overflow: hidden;
+        background: #111;
+        padding: 24px 32px;
+        color: #b1b0ae;
+        font:
+          14px Arial,
+          sans-serif;
+      }
+      #entry-skeleton * {
+        box-sizing: border-box;
+      }
+      #entry-skeleton .boot-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        height: 34px;
+        margin-bottom: 32px;
+      }
+      #entry-skeleton .boot-shape {
+        display: block;
+        background: #242424;
+        border-radius: 6px;
+      }
+      #entry-skeleton .boot-brand {
+        width: 112px;
+        height: 34px;
+      }
+      #entry-skeleton .boot-action {
+        width: 140px;
+        height: 34px;
+        border-radius: 12px;
+      }
+      #entry-skeleton .boot-filters {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+      #entry-skeleton .boot-filters i {
+        width: 78px;
+        height: 32px;
+        border-radius: 12px;
+      }
+      #entry-skeleton .boot-count {
+        width: 140px;
+        height: 18px;
+        margin-bottom: 28px;
+      }
+      #entry-skeleton .boot-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+      #entry-skeleton .boot-grid i {
+        aspect-ratio: 3/4;
+      }
+      #entry-skeleton .boot-grid i:nth-child(even) {
+        aspect-ratio: 4/3;
+      }
+      #entry-skeleton .boot-status {
+        position: absolute;
+        clip-path: inset(50%);
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+      }
+      @media (max-width: 1100px) and (min-width: 701px) {
+        #entry-skeleton .boot-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 700px) {
+        .app-starting #entry-skeleton {
+          padding: 12px 16px;
+        }
+        #entry-skeleton .boot-bar {
+          height: 34px;
+          margin-bottom: 22px;
+        }
+        #entry-skeleton .boot-filters {
+          margin-bottom: 24px;
+        }
+        #entry-skeleton .boot-count {
+          margin-bottom: 20px;
+        }
+        #entry-skeleton .boot-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    </style>
+    <link rel="modulepreload" href="sounds.mjs" />
+    <link rel="modulepreload" href="sound-service.mjs" />
     <link rel="icon" href="assets/pluck-logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" sizes="600x600" href="assets/pluck-app-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
@@ -40,6 +140,24 @@
     <script type="module" src="app.js"></script>
   </head>
   <body>
+    <div id="entry-skeleton" role="status" aria-label="Loading Pluck">
+      <span class="boot-status">Loading Pluck…</span>
+      <div aria-hidden="true">
+        <div class="boot-bar">
+          <i class="boot-shape boot-brand"></i
+          ><i class="boot-shape boot-action"></i>
+        </div>
+        <div class="boot-filters">
+          <i class="boot-shape"></i><i class="boot-shape"></i
+          ><i class="boot-shape"></i>
+        </div>
+        <i class="boot-shape boot-count"></i>
+        <div class="boot-grid">
+          <i class="boot-shape"></i><i class="boot-shape"></i
+          ><i class="boot-shape"></i><i class="boot-shape"></i>
+        </div>
+      </div>
+    </div>
     <section
       id="auth-screen"
       class="screen auth-screen"

@@ -1439,6 +1439,7 @@ dialog,
     gap: 24px;
   }
   .detail-info .detail-metadata { max-height: 25dvh; overflow: auto; }
+  .detail-info .detail-metadata > * { flex-shrink: 0; }
   .detail-info h2 { font-size: 18px; }
   .detail-layout .preview-control { height: 40px; }
   .detail-layout .preview-icon { width: 40px; flex-basis: 40px; }

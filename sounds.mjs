@@ -1,12 +1,18 @@
-import { createUISFX } from "/assets/uisfx.js";
 import { createSoundService } from "./sound-service.mjs";
 
+// Optional audio must never block the visual app or its loading states.
+let createUISFX;
+void import("/assets/uisfx.js")
+  .then((runtime) => {
+    createUISFX = runtime.createUISFX;
+  })
+  .catch(() => {});
 let storage;
 try {
   storage = window.localStorage;
 } catch {}
 export const sound = createSoundService({
-  createPlayer: createUISFX,
+  createPlayer: (options) => createUISFX?.(options),
   storage,
   createContext: () => {
     const Context = window.AudioContext || window.webkitAudioContext;

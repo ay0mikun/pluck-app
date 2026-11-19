@@ -63,6 +63,16 @@ export function createSoundService({
       storage?.setItem(PREFERENCE_KEY, JSON.stringify(preferences));
     } catch {}
   };
+  function ensurePlayer() {
+    if (!player && context)
+      player = createPlayer({
+        pack: SOUND_PACK,
+        volume: preferences.volume,
+        enabled: preferences.enabled,
+        context,
+      });
+    return player;
+  }
   function unlock() {
     if (disposed || !preferences.enabled) return;
     try {
@@ -70,12 +80,7 @@ export function createSoundService({
       if (!context) return;
       // resume() must be invoked synchronously inside the user's gesture.
       const resumed = context.resume();
-      player ||= createPlayer({
-        pack: SOUND_PACK,
-        volume: preferences.volume,
-        enabled: preferences.enabled,
-        context,
-      });
+      ensurePlayer();
       ready = context.state === "running";
       Promise.resolve(resumed)
         .then(() => {
@@ -189,7 +194,7 @@ export function createSoundService({
     try {
       if (name === "board") return boardClick();
       if (tone) return glideSound(tone);
-      return player.play(cue);
+      return ensurePlayer()?.play(cue) ?? null;
     } catch {
       return null;
     }

@@ -7,7 +7,12 @@ import {
   SOUND_PACK,
 } from "../sound-service.mjs";
 
-function harness({ saved = {}, nullPlayback = false, noAudio = false } = {}) {
+function harness({
+  saved = {},
+  nullPlayback = false,
+  noAudio = false,
+  delayedPlayer = false,
+} = {}) {
   const calls = [],
     data = new Map([["pluck:sound", JSON.stringify(saved)]]);
   let time = 0,
@@ -104,7 +109,7 @@ function harness({ saved = {}, nullPlayback = false, noAudio = false } = {}) {
   const service = createSoundService({
     createPlayer(options) {
       calls.push(["create", options]);
-      return player;
+      return delayedPlayer ? null : player;
     },
     createContext() {
       calls.push("context");
@@ -126,6 +131,9 @@ function harness({ saved = {}, nullPlayback = false, noAudio = false } = {}) {
       calls
         .filter((call) => Array.isArray(call) && call[0] === "play")
         .map((call) => call[1]),
+    loadPlayer() {
+      delayedPlayer = false;
+    },
     advance(ms) {
       time += ms;
     },
@@ -380,4 +388,17 @@ test("Paste link uses the reference Save chime instead of the primary Select cue
   );
   h.service.stopAll();
   await sound.ended;
+});
+
+test("slow optional audio can become available after the first gesture", async () => {
+  const h = harness({ delayedPlayer: true });
+  h.service.unlock();
+  assert.doesNotThrow(() => h.service.event("primary", { gesture: true }));
+  assert.deepEqual(h.cues(), []);
+  h.loadPlayer();
+  h.advance(500);
+  h.service.event("imported");
+  assert.deepEqual(h.cues(), ["success"]);
+  assert.equal(h.calls.filter((call) => call === "context").length, 1);
+  await h.service.destroy();
 });
