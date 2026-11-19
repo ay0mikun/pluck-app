@@ -114,7 +114,7 @@ export function createSoundService({
     filter.type = "bandpass";
     filter.frequency.value = 5400;
     filter.Q.value = 1.8;
-    gain.gain.value = preferences.volume * 0.4;
+    gain.gain.value = preferences.volume * 0.5;
     source.connect(filter);
     filter.connect(gain);
     gain.connect(context.destination);
