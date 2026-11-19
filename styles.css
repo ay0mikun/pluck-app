@@ -205,7 +205,7 @@ h1 {
   background: url("assets/login-rule.svg") repeat-x;
 }
 
-.input-field label {
+.input-field > label {
   margin-bottom: 8px;
   color: #b1b0ae;
   font: 400 15px/18px Geist, sans-serif;
