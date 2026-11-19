@@ -5,6 +5,32 @@ export const SOUND_EVENTS = Object.freeze({
   copied: "copy",
   imported: "success",
 });
+const GLIDES = {
+  previewOpen: {
+    from: 220,
+    to: 520,
+    glide: 0.12,
+    duration: 0.16,
+    attack: 0.085,
+    level: 0.04,
+  },
+  previewClose: {
+    from: 700,
+    to: 220,
+    glide: 0.06,
+    duration: 0.1,
+    attack: 0.004,
+    level: 0.05,
+  },
+  pasteLink: {
+    from: 523.25,
+    to: 783.99,
+    glide: 0.07,
+    duration: 0.28,
+    attack: 0.003,
+    level: 0.065,
+  },
+};
 const PREFERENCE_KEY = "pluck:sound";
 
 // Framework-neutral service: no browser or audio work until a trusted gesture.
@@ -123,21 +149,18 @@ export function createSoundService({
     return handle;
   }
   // Reference-style bubble motion: a gentle rise in, a quicker fall out.
-  function previewSound(opening) {
+  function glideSound(tone) {
     const source = context.createOscillator();
     const gain = context.createGain();
     const start = context.currentTime;
-    const duration = opening ? 0.16 : 0.1;
+    const { duration } = tone;
     source.type = "sine";
-    source.frequency.setValueAtTime(opening ? 220 : 700, start);
-    source.frequency.exponentialRampToValueAtTime(
-      opening ? 520 : 220,
-      start + (opening ? 0.12 : 0.06),
-    );
+    source.frequency.setValueAtTime(tone.from, start);
+    source.frequency.exponentialRampToValueAtTime(tone.to, start + tone.glide);
     gain.gain.setValueAtTime(0.0001, start);
     gain.gain.linearRampToValueAtTime(
-      preferences.volume * (opening ? 0.04 : 0.05),
-      start + (opening ? 0.085 : 0.004),
+      preferences.volume * tone.level,
+      start + tone.attack,
     );
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
     source.connect(gain);
@@ -149,8 +172,9 @@ export function createSoundService({
   }
   function event(name, { gesture = false } = {}) {
     const cue = SOUND_EVENTS[name];
+    const tone = Object.hasOwn(GLIDES, name) ? GLIDES[name] : null;
     if (
-      (!cue && !["board", "previewOpen", "previewClose"].includes(name)) ||
+      (!cue && name !== "board" && !tone) ||
       disposed ||
       (!ready && !(gesture && context)) ||
       !preferences.enabled ||
@@ -159,20 +183,12 @@ export function createSoundService({
     )
       return null;
     const time = now();
-    const cooldown = [
-      "primary",
-      "board",
-      "previewOpen",
-      "previewClose",
-    ].includes(name)
-      ? 120
-      : 0;
+    const cooldown = name === "primary" || name === "board" || tone ? 120 : 0;
     if (time - (lastPlayed.get(name) ?? -Infinity) < cooldown) return null;
     lastPlayed.set(name, time);
     try {
       if (name === "board") return boardClick();
-      if (name === "previewOpen" || name === "previewClose")
-        return previewSound(name === "previewOpen");
+      if (tone) return glideSound(tone);
       return player.play(cue);
     } catch {
       return null;

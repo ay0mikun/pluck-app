@@ -45,7 +45,9 @@ document.addEventListener(
       !button.hasAttribute("data-muted")
     ) {
       sound.unlock();
-      sound.event("primary", { gesture: true });
+      sound.event(button.id === "paste-link" ? "pasteLink" : "primary", {
+        gesture: true,
+      });
     }
   },
   options,

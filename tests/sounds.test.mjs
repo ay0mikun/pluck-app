@@ -365,3 +365,19 @@ test("preview open rises and preview close falls, with shared mute and cleanup",
     2,
   );
 });
+
+test("Paste link uses the reference Save chime instead of the primary Select cue", async () => {
+  const h = unlocked();
+  const sound = h.service.event("pasteLink", { gesture: true });
+  assert.deepEqual(h.cues(), []);
+  assert.deepEqual(
+    h.calls.find((c) => Array.isArray(c) && c[0] === "frequency.start"),
+    ["frequency.start", 523.25],
+  );
+  assert.deepEqual(
+    h.calls.find((c) => Array.isArray(c) && c[0] === "frequency.end"),
+    ["frequency.end", 783.99],
+  );
+  h.service.stopAll();
+  await sound.ended;
+});
