@@ -275,7 +275,6 @@ function createPickerMotion(picker, panel) {
   return (next, immediate = false) => {
     if (next === expanded && !immediate) return;
     expanded = next;
-    if (next) sound.event("opened");
     picker.toggleAttribute("data-expanded", next);
     panel.inert = !next;
     const visible = picker.open;
@@ -306,7 +305,6 @@ function openDialog(dialog) {
   if (touch) dialog.setAttribute("autofocus", "");
   try {
     dialog.showModal();
-    sound.event("opened");
     if (triggerBounds && triggerBounds.width) {
       const bounds = dialog.getBoundingClientRect();
       dialog.style.transformOrigin = `${triggerBounds.left + triggerBounds.width / 2 - bounds.left}px ${triggerBounds.top + triggerBounds.height / 2 - bounds.top}px`;
@@ -425,7 +423,6 @@ authForm.onsubmit = async (event) => {
   if (authSubmit.disabled) return;
   if (!authEmail.validity.valid) {
     emailError(authEmail.value.trim() ? "Email address is not valid" : "Required");
-    sound.event("failed");
     authEmail.focus();
     return;
   }
@@ -438,7 +435,7 @@ authForm.onsubmit = async (event) => {
   label.textContent = "Please wait...";
   status.textContent = "";
   try {
-    const result = await sound.run("sent", () => api("auth/continue", "POST", { email: authEmail.value }));
+    const result = await api("auth/continue", "POST", { email: authEmail.value });
     if (result.local_preview) {
       const link = document.createElement("a");
       link.href = result.local_preview;
@@ -657,7 +654,6 @@ $("#filters").onclick = (e) => {
   const button = e.target.closest("[data-board]");
   if (!button) return;
   const boardId = button.dataset.board;
-  if (selectedBoard !== (boardId || null)) sound.event("selected");
   selectedBoard = boardId || null;
   render();
   if (!useTouchFocus()) {
@@ -779,7 +775,7 @@ importForm.onsubmit = async (event) => {
   event.preventDefault();
   if (importDialog.dataset.busy === "true") return;
   const url = importUrl.value.trim();
-  if (!validPostLink(url)) { setImportState(url ? "Invalid link" : "Link is missing!"); sound.event("failed"); return; }
+  if (!validPostLink(url)) { setImportState(url ? "Invalid link" : "Link is missing!"); return; }
   if (!state.boards.some((board) => board.id === importBoard)) {
     $("#import-board-error").hidden = false;
     importButton.querySelector(".button-label").textContent = "Select a board";
@@ -789,7 +785,7 @@ importForm.onsubmit = async (event) => {
   importDialog.dataset.busy = "true";
   setImportState();
   try {
-    const result = await sound.run("saved", () => api("import", "POST", {url, board_id: importBoard}), { processing: true });
+    const result = await sound.run("imported", () => api("import", "POST", {url, board_id: importBoard}));
     selectedBoard = importBoard;
     if (result.designs) {
       const updated = new Map(result.designs.map((design) => [design.id, design]));
@@ -838,13 +834,12 @@ boardForm.onsubmit = (e) => {
   e.preventDefault();
   if ($("#board-dialog").dataset.busy === "true") return;
   if (!updateBoardName(true)) {
-    sound.event("failed");
     boardName.focus();
     return;
   }
   const form = e.currentTarget;
   submitting(form, async () => {
-    const result = await sound.run("saved", () => api("boards", "POST", { name: form.elements.name.value }));
+    const result = await api("boards", "POST", { name: form.elements.name.value });
     const onCreated = onBoardCreated;
     if (!onCreated) selectedBoard = result.id;
     await refresh();
@@ -888,7 +883,7 @@ editForm.onsubmit = async (event) => {
   button.querySelector("span").textContent = "Saving";
   editName.readOnly = true;
   try {
-    await sound.run("saved", () => api(`boards/${board.id}`, "PATCH", {name: editName.value.trim()}));
+    await api(`boards/${board.id}`, "PATCH", {name: editName.value.trim()});
     await refresh();
     editDialog.close();
     toast("Board updated.");
@@ -1094,12 +1089,12 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
       : "Save to board";
   }
 
-  async function saveBoards(boards, boardId, announce = true) {
+  async function saveBoards(boards, boardId) {
     saving = true;
     const controls = dialog.querySelectorAll(".board-options input, .board-create, .detail-navigation button:not(:disabled), #remove-design");
     controls.forEach((control) => { control.disabled = true; });
     try {
-      await sound.run(announce ? (boards.length > design.boards.length ? "added" : "removed") : null, () => api(`designs/${id}`, "PATCH", { boards }));
+      await api(`designs/${id}`, "PATCH", { boards });
       design.boards = boards;
       const current = state.designs.find((item) => item.id === id);
       if (current) current.boards = boards;
@@ -1138,12 +1133,11 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
   };
   panel.querySelector(".board-create").onclick = () => openBoard(({ id: boardId }) => {
     renderBoards();
-    void saveBoards([...design.boards, boardId], boardId, false);
+    void saveBoards([...design.boards, boardId], boardId);
   });
 
   function navigate(step, button) {
     if (!saving && ids[index + step]) {
-      sound.event(step > 0 ? "next" : "previous");
       openDetail(ids, index + step, button);
     }
   }
@@ -1169,7 +1163,6 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
     dialog.dataset.swipeClick = "true";
     const step = dx < 0 ? 1 : -1;
     if (!ids[index + step]) return;
-    sound.event(step > 0 ? "next" : "previous");
     openDetail(ids, index + step);
     if (!reducedMotion.matches) {
       dialog.querySelector(".detail-stage").animate([
@@ -1212,7 +1205,6 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
       sound.event("copied");
       toast("Image copied.");
     } catch {
-      sound.event("failed");
       toast("Could not copy the image.", "error");
     }
   };

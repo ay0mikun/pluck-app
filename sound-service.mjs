@@ -1,20 +1,9 @@
 export const SOUND_PACK = "soft";
 export const SOUND_EVENTS = Object.freeze({
-  opened: "open",
-  closed: "close",
-  saved: "success",
+  primary: "select",
   deleted: "delete",
   copied: "copy",
-  failed: "error",
-  selected: "select",
-  added: "check",
-  removed: "uncheck",
-  next: "forward",
-  previous: "back",
-  enabled: "toggle-on",
-  sent: "send",
-  typing: "typing",
-  volume: "volume-change",
+  imported: "success",
 });
 const PREFERENCE_KEY = "pluck:sound";
 
@@ -24,15 +13,12 @@ export function createSoundService({
   createContext,
   storage,
   visible = () => true,
-  schedule = setTimeout,
-  cancel = clearTimeout,
   now = () => performance.now(),
 }) {
   let preferences = { enabled: true, volume: 0.75, typing: false };
   try {
     const saved = JSON.parse(storage?.getItem(PREFERENCE_KEY) || "{}");
     if (typeof saved.enabled === "boolean") preferences.enabled = saved.enabled;
-    if (typeof saved.typing === "boolean") preferences.typing = saved.typing;
     if (Number.isFinite(saved.volume))
       preferences.volume = Math.max(0, Math.min(1, saved.volume));
   } catch {
@@ -43,7 +29,6 @@ export function createSoundService({
     ready = false,
     disposed = false,
     disposing;
-  const loops = new Map();
   const lastPlayed = new Map();
   const persist = () => {
     try {
@@ -75,85 +60,32 @@ export function createSoundService({
       ready = false;
     }
   }
-  function event(name) {
+  function event(name, { gesture = false } = {}) {
     const cue = SOUND_EVENTS[name];
     if (
       !cue ||
       disposed ||
-      !ready ||
+      (!ready && !(gesture && context)) ||
       !preferences.enabled ||
       !preferences.volume ||
       !visible()
     )
       return null;
-    if (name === "typing" && !preferences.typing) return null;
     const time = now();
-    const cooldown = [
-      "selected",
-      "next",
-      "previous",
-      "volume",
-      "opened",
-      "closed",
-    ].includes(name)
-      ? 120
-      : name === "failed"
-        ? 250
-        : 0;
+    const cooldown = name === "primary" ? 120 : 0;
     if (time - (lastPlayed.get(name) ?? -Infinity) < cooldown) return null;
     lastPlayed.set(name, time);
     try {
-      return player.play(
-        cue,
-        name === "typing" ? { volume: 0.1, cooldownMs: 0 } : undefined,
-      );
+      return player.play(cue);
     } catch {
       return null;
     }
   }
-  function beginProcessing() {
-    if (loops.has("processing")) return loops.get("processing").stop;
-    const entry = { handle: null, timer: null, timeout: null, stop };
-    function stop() {
-      cancel(entry.timer);
-      cancel(entry.timeout);
-      entry.handle?.stop();
-      entry.handle = null;
-      if (loops.get("processing") === entry) loops.delete("processing");
-    }
-    entry.timer = schedule(() => {
-      if (
-        !disposed &&
-        ready &&
-        preferences.enabled &&
-        preferences.volume &&
-        visible()
-      ) {
-        try {
-          entry.handle = player.play("processing", { volume: 0.025 });
-        } catch {}
-      }
-    }, 800);
-    entry.timeout = schedule(stop, 30000);
-    loops.set("processing", entry);
-    return stop;
-  }
   function stopAll() {
-    for (const loop of [...loops.values()]) loop.stop();
     player?.stopAll();
   }
-  async function run(name, action, { processing = false } = {}) {
-    const stop = processing ? beginProcessing() : () => {};
-    let result;
-    try {
-      result = await action();
-    } catch (error) {
-      stop();
-      if (error?.name !== "AbortError") event("failed");
-      throw error;
-    } finally {
-      stop();
-    }
+  async function run(name, action) {
+    const result = await action();
     if (name) event(name);
     return result;
   }
@@ -168,10 +100,6 @@ export function createSoundService({
     preferences.volume = Math.max(0, Math.min(1, volume));
     if (!preferences.volume) stopAll();
     player?.setVolume(preferences.volume);
-    persist();
-  }
-  function setTyping(enabled) {
-    preferences.typing = Boolean(enabled);
     persist();
   }
   function destroy() {
@@ -196,7 +124,6 @@ export function createSoundService({
     stopAll,
     setEnabled,
     setVolume,
-    setTyping,
     destroy,
     preferences: () => ({ ...preferences }),
   };

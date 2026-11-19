@@ -9,10 +9,8 @@ import {
 
 function harness({ saved = {}, nullPlayback = false, noAudio = false } = {}) {
   const calls = [],
-    timers = new Map(),
     data = new Map([["pluck:sound", JSON.stringify(saved)]]);
   let time = 0,
-    nextTimer = 0,
     visible = true;
   const context = {
     state: "suspended",
@@ -27,15 +25,9 @@ function harness({ saved = {}, nullPlayback = false, noAudio = false } = {}) {
     },
   };
   const player = {
-    play(cue, options) {
-      calls.push(["play", cue, options]);
-      return nullPlayback
-        ? null
-        : {
-            stop() {
-              calls.push(["stop", cue]);
-            },
-          };
+    play(cue) {
+      calls.push(["play", cue]);
+      return nullPlayback ? null : { stop() {} };
     },
     stopAll() {
       calls.push("stopAll");
@@ -65,17 +57,10 @@ function harness({ saved = {}, nullPlayback = false, noAudio = false } = {}) {
     },
     visible: () => visible,
     now: () => time,
-    schedule(fn, milliseconds) {
-      const id = ++nextTimer;
-      timers.set(id, { fn, at: time + milliseconds });
-      return id;
-    },
-    cancel: (id) => timers.delete(id),
   });
   return {
     service,
     calls,
-    timers,
     data,
     context,
     cues: () =>
@@ -84,11 +69,6 @@ function harness({ saved = {}, nullPlayback = false, noAudio = false } = {}) {
         .map((call) => call[1]),
     advance(ms) {
       time += ms;
-      for (const [id, timer] of timers)
-        if (timer.at <= time) {
-          timers.delete(id);
-          timer.fn();
-        }
     },
     hide() {
       visible = false;
@@ -104,26 +84,29 @@ function deferred() {
   });
   return { promise, resolve, reject };
 }
-function enabled(options = {}) {
-  const h = harness({ saved: { enabled: true, volume: 0.7 }, ...options });
+function unlocked(options) {
+  const h = harness(options);
   h.service.unlock();
   return h;
 }
 
-test("all event cues exist in the catalog; processing is the only loop used", () => {
+test("only the four requested semantic cues are allowed and all are real one-shots", () => {
+  assert.deepEqual(SOUND_EVENTS, {
+    primary: "select",
+    deleted: "delete",
+    copied: "copy",
+    imported: "success",
+  });
   const cues = new Set(CUES.map((cue) => cue.name));
   for (const cue of Object.values(SOUND_EVENTS)) {
     assert.ok(cues.has(cue));
     assert.equal(getPlaybackMode(cue), "one-shot");
   }
-  assert.equal(getPlaybackMode("processing"), "loop");
   assert.equal(SOUND_PACK, "soft");
-  assert.equal(SOUND_EVENTS.deleted, "delete");
-  assert.equal(SOUND_EVENTS.copied, "copy");
 });
-test("startup defaults to sounds on at 75%, typing off, with no autoplay", () => {
-  const h = harness();
-  h.service.event("opened");
+test("default sounds are on at 75%, typing off, with no autoplay or SSR audio construction", () => {
+  const h = harness({ saved: { typing: true } });
+  h.service.event("imported");
   assert.deepEqual(h.calls, []);
   assert.deepEqual(h.service.preferences(), {
     enabled: true,
@@ -131,181 +114,137 @@ test("startup defaults to sounds on at 75%, typing off, with no autoplay", () =>
     typing: false,
   });
   h.service.unlock();
-  const creation = h.calls.find(
-    (call) => Array.isArray(call) && call[0] === "create",
+  assert.equal(
+    h.calls.find((call) => Array.isArray(call) && call[0] === "create")[1]
+      .volume,
+    0.75,
   );
-  assert.equal(creation[1].volume, 0.75);
-  assert.equal(creation[1].enabled, true);
   assert.deepEqual(h.cues(), []);
 });
-test("suppress pre-unlock async feedback rather than replay it on unlock", async () => {
-  const h = harness({ saved: { enabled: true } });
-  await h.service.run("saved", async () => 42);
-  assert.deepEqual(h.cues(), []);
-  h.service.unlock();
-  assert.deepEqual(h.cues(), []);
-  h.service.event("opened");
-  assert.deepEqual(h.cues(), ["open"]);
-});
-test("pointer and keyboard unlocks reuse one player and do not generate click cues", () => {
-  const h = enabled();
+test("primary activation emits select once; pointer/keyboard unlocks reuse one player", () => {
+  const h = unlocked();
   h.service.unlock();
   h.service.unlock();
+  h.service.event("primary", { gesture: true });
   assert.equal(
     h.calls.filter((call) => Array.isArray(call) && call[0] === "create")
       .length,
     1,
   );
-  assert.deepEqual(h.cues(), []);
-  h.service.event("opened");
-  assert.deepEqual(h.cues(), ["open"]);
+  assert.deepEqual(h.cues(), ["select"]);
+  h.service.event("primary", { gesture: true });
+  assert.deepEqual(h.cues(), ["select"]);
+  h.advance(121);
+  h.service.event("primary", { gesture: true });
+  assert.deepEqual(h.cues(), ["select", "select"]);
 });
-test("save/delete outcomes happen only after the real task resolves", async () => {
-  for (const event of ["saved", "deleted"]) {
-    const h = enabled(),
+test("first keyboard activation can play select while the gesture resumes audio; async cues wait", async () => {
+  const h = harness(),
+    resume = deferred();
+  h.context.resume = () => resume.promise;
+  h.service.unlock();
+  h.service.event("primary", { gesture: true });
+  h.service.event("imported");
+  assert.deepEqual(h.cues(), ["select"]);
+  h.context.state = "running";
+  resume.resolve();
+  await resume.promise;
+  h.service.event("imported");
+  assert.deepEqual(h.cues(), ["select", "success"]);
+});
+test("delete, copy and X import cues happen only after their real operations succeed", async () => {
+  for (const event of ["deleted", "copied", "imported"]) {
+    const h = unlocked(),
       task = deferred();
-    const result = h.service.run(event, () => task.promise, {
-      processing: true,
-    });
+    const result = h.service.run(event, () => task.promise);
     assert.deepEqual(h.cues(), []);
-    h.advance(800);
-    assert.deepEqual(h.cues(), ["processing"]);
     task.resolve("done");
     assert.equal(await result, "done");
-    const outcome = SOUND_EVENTS[event];
-    assert.deepEqual(h.cues(), ["processing", outcome]);
-    assert.ok(
-      h.calls.findIndex((c) => Array.isArray(c) && c[0] === "stop") <
-        h.calls.findIndex((c) => Array.isArray(c) && c[1] === outcome),
-    );
-    assert.equal(h.timers.size, 0);
+    assert.deepEqual(h.cues(), [SOUND_EVENTS[event]]);
   }
 });
-test("failure stops processing and emits error, cancellation remains silent", async () => {
+test("failed, cancelled and timed out operations never play outcome or error sounds", async () => {
   for (const name of ["Error", "AbortError", "TimeoutError"]) {
-    const h = enabled(),
+    const h = unlocked(),
       task = deferred();
-    const result = h.service.run("saved", () => task.promise, {
-      processing: true,
-    });
-    h.advance(800);
+    const result = h.service.run("imported", () => task.promise);
     const error = new Error("failed");
     error.name = name;
     task.reject(error);
     await assert.rejects(result, error);
-    assert.deepEqual(
-      h.cues(),
-      name === "AbortError" ? ["processing"] : ["processing", "error"],
-    );
-    assert.ok(h.calls.some((c) => Array.isArray(c) && c[0] === "stop"));
-    assert.equal(h.timers.size, 0);
+    assert.deepEqual(h.cues(), []);
   }
 });
-test("fast operations cancel the delayed loop before it starts", async () => {
-  const h = enabled();
-  await h.service.run("saved", async () => {}, { processing: true });
-  h.advance(1000);
-  assert.deepEqual(h.cues(), ["success"]);
-  assert.equal(h.timers.size, 0);
+test("all other sounds remain off, including processing, typing, dialogs, filters and navigation", () => {
+  const h = unlocked();
+  for (const name of [
+    "opened",
+    "closed",
+    "selected",
+    "saved",
+    "next",
+    "previous",
+    "failed",
+    "typing",
+    "processing",
+    "sent",
+    "enabled",
+    "added",
+    "removed",
+    "volume",
+  ])
+    h.service.event(name);
+  assert.deepEqual(h.cues(), []);
 });
-test("mute, zero volume, navigation/logout stopAll and visibility stop pending and active loops", async () => {
-  for (const action of [
-    (h) => h.service.setEnabled(false),
-    (h) => h.service.setVolume(0),
-    (h) => h.service.stopAll(),
-    (h) => h.hide(),
-  ]) {
-    for (const active of [false, true]) {
-      const h = enabled(),
-        task = deferred();
-      const result = h.service.run(null, () => task.promise, {
-        processing: true,
-      });
-      if (active) h.advance(800);
-      action(h);
-      h.advance(1000);
-      task.resolve();
-      await result;
-      assert.equal(h.timers.size, 0);
-      assert.ok(h.calls.includes("stopAll"));
-      if (active)
-        assert.ok(h.calls.some((c) => Array.isArray(c) && c[0] === "stop"));
-      else assert.deepEqual(h.cues(), []);
-    }
-  }
+test("pre-unlock/background outcomes are suppressed, never replayed later", async () => {
+  const h = harness();
+  await h.service.run("imported", async () => 1);
+  h.service.unlock();
+  assert.deepEqual(h.cues(), []);
+  h.hide();
+  h.service.event("copied");
+  assert.deepEqual(h.cues(), []);
 });
-test("mute is immediate and preferences survive a new instance", () => {
-  const h = enabled();
-  h.service.setTyping(true);
+test("mute immediately stops audio, persists volume and stays silent on a new instance", () => {
+  const h = unlocked();
   h.service.setVolume(0.35);
   h.service.setEnabled(false);
-  const stop = h.calls.lastIndexOf("stopAll");
-  const disabled = h.calls.findIndex(
-    (c) => Array.isArray(c) && c[0] === "enabled" && c[1] === false,
+  assert.ok(
+    h.calls.lastIndexOf("stopAll") <
+      h.calls.findIndex(
+        (c) => Array.isArray(c) && c[0] === "enabled" && c[1] === false,
+      ),
   );
-  assert.ok(stop < disabled);
-  h.service.event("saved");
+  h.service.event("primary", { gesture: true });
   assert.deepEqual(h.cues(), []);
   const next = harness({ saved: JSON.parse(h.data.get("pluck:sound")) });
   assert.deepEqual(next.service.preferences(), {
     enabled: false,
     volume: 0.35,
-    typing: true,
+    typing: false,
   });
+  next.service.unlock();
+  assert.deepEqual(next.calls, []);
 });
-test("optional typing uses a short cue for every input without a cooldown", () => {
-  const h = enabled();
-  h.service.event("typing");
-  assert.deepEqual(h.cues(), []);
-  h.service.setTyping(true);
-  for (let i = 0; i < 4; i++) h.service.event("typing");
-  assert.deepEqual(h.cues(), ["typing", "typing", "typing", "typing"]);
-  assert.deepEqual(h.calls.at(-1)[2], { volume: 0.1, cooldownMs: 0 });
+test("zero volume, null playback and unsupported audio do not break product actions", async () => {
+  const h = unlocked({ nullPlayback: true });
+  assert.equal(await h.service.run("copied", async () => 7), 7);
+  h.service.setVolume(0);
+  h.service.event("deleted");
+  assert.deepEqual(h.cues(), ["copy"]);
+  const unsupported = unlocked({ noAudio: true });
+  assert.equal(await unsupported.service.run("imported", async () => 8), 8);
 });
-test("rapid navigation is throttled and null playback/unsupported audio never breaks actions", async () => {
-  const h = enabled({ nullPlayback: true });
-  h.service.event("next");
-  h.service.event("next");
-  h.advance(121);
-  h.service.event("next");
-  assert.deepEqual(h.cues(), ["forward", "forward"]);
-  assert.equal(
-    await h.service.run("saved", async () => 7, { processing: true }),
-    7,
-  );
-  const unsupported = enabled({ noAudio: true });
-  assert.equal(await unsupported.service.run("saved", async () => 8), 8);
-});
-test("final teardown is idempotent, drains loops, destroys player before caller-owned context", async () => {
-  const h = enabled(),
+test("final teardown is idempotent and destroys player before caller-owned context", async () => {
+  const h = unlocked(),
     task = deferred();
-  const result = h.service.run("saved", () => task.promise, {
-    processing: true,
-  });
-  h.advance(800);
+  const result = h.service.run("imported", () => task.promise);
   await Promise.all([h.service.destroy(), h.service.destroy()]);
   task.resolve();
   await result;
   h.service.unlock();
-  assert.deepEqual(h.cues(), ["processing"]);
+  assert.deepEqual(h.cues(), []);
   assert.equal(h.calls.filter((c) => c === "destroy").length, 1);
   assert.ok(h.calls.indexOf("destroy") < h.calls.indexOf("context.close"));
   assert.equal(h.context.state, "closed");
-  assert.equal(h.timers.size, 0);
-});
-
-test("a stalled import loop stops at its safety timeout without claiming success", async () => {
-  const h = enabled(),
-    task = deferred();
-  const result = h.service.run("saved", () => task.promise, {
-    processing: true,
-  });
-  h.advance(800);
-  h.advance(29200);
-  assert.ok(h.calls.some((c) => Array.isArray(c) && c[0] === "stop"));
-  assert.deepEqual(h.cues(), ["processing"]);
-  assert.equal(h.timers.size, 0);
-  task.resolve();
-  await result;
-  assert.deepEqual(h.cues(), ["processing", "success"]);
 });

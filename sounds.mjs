@@ -34,24 +34,19 @@ document.addEventListener(
 document.addEventListener(
   "click",
   (event) => {
-    const close = event.target.closest(
-      ".close, .board-drawer-close, #close-preview, #cancel-edit-board, #cancel-delete",
+    const button = event.target.closest(
+      "button.primary:not(#confirm-delete), button.auth-submit",
     );
     if (
       event.isTrusted &&
-      close &&
-      !close.disabled &&
-      close.closest("dialog")?.dataset.busy !== "true"
-    )
-      sound.event("closed");
-  },
-  options,
-);
-document.addEventListener(
-  "cancel",
-  (event) => {
-    if (event.isTrusted && event.target.dataset.busy !== "true")
-      sound.event("closed");
+      button &&
+      !button.disabled &&
+      button.getAttribute("aria-disabled") !== "true" &&
+      !button.hasAttribute("data-muted")
+    ) {
+      sound.unlock();
+      sound.event("primary", { gesture: true });
+    }
   },
   options,
 );
