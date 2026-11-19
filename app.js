@@ -840,6 +840,10 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
   const dialog = $("#detail-dialog");
   dialog.dataset.design = id;
   dialog.toggleAttribute("data-navigating", dialog.open);
+  const gridImage = [...document.querySelectorAll("#design-grid [data-design]")]
+    .find((card) => card.dataset.design === id)?.querySelector(".image-slot img");
+  const thumbnailReady = gridImage?.complete && gridImage.naturalWidth > 0;
+  const thumbnailURL = thumbnailReady ? gridImage.currentSrc : mediaURL(design.thumbnail_url);
   const creator = (design.creator || "").replace(/^@/, "");
   const icon = (name) =>
     `<img src="/assets/preview-${name}.svg" width="16" height="16" alt="" />`;
@@ -851,8 +855,8 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
         ${design.source ? `<a class="preview-control source-post" href="${escapeHTML(design.source)}" target="_blank" rel="noopener noreferrer" aria-label="View post"><img src="/assets/workspace-x.svg" alt="" />View post</a>` : ""}
       </div>
       <div class="detail-stage">
-        <div class="detail-image-slot loading" style="--image-ratio:${design.width / design.height}">
-          <img class="detail-image" src="${escapeHTML(mediaURL(design.thumbnail_url))}" width="${design.width}" height="${design.height}" alt="${escapeHTML(design.title)}" decoding="async" fetchpriority="high" />
+        <div class="detail-image-slot${thumbnailReady ? "" : " loading"}" style="--image-ratio:${design.width / design.height}">
+          <img class="detail-image" src="${escapeHTML(thumbnailURL)}" width="${design.width}" height="${design.height}" alt="${escapeHTML(design.title)}" decoding="async" fetchpriority="high" />
         </div>
         <nav class="detail-navigation" aria-label="Browse designs">
           <button id="previous-design" class="preview-control" type="button"${index === 0 ? " disabled" : ""}>${icon("previous")} Previous</button>
@@ -892,7 +896,8 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
   const sharpPreview = new Image();
   sharpPreview.decoding = "async";
   sharpPreview.fetchPriority = "high";
-  sharpPreview.onload = () => {
+  sharpPreview.onload = async () => {
+    try { await sharpPreview.decode(); } catch { return; }
     if (previewImage.isConnected) {
       previewImage.src = sharpPreview.src;
       revealPreview();
