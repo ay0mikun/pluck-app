@@ -1,5 +1,5 @@
 {
   "framework": null,
-  "installCommand": "",
+  "installCommand": "npm ci --omit=dev",
   "buildCommand": "python3 scripts/build_app.py .vercel/output"
 }

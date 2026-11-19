@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_FILES = ("index.html", "app.js", "styles.css", "fonts.css", "manifest.webmanifest")
+PUBLIC_FILES = ("index.html", "app.js", "sounds.mjs", "sound-service.mjs", "styles.css", "fonts.css", "manifest.webmanifest")
 
 
 def build(destination, api_origin):
@@ -33,6 +33,9 @@ def build(destination, api_origin):
     # Preview icons are selected by name at runtime.
     assets.update(str(path.relative_to(ROOT)) for path in (ROOT / "assets").glob("preview-*.svg"))
     assets.add("assets/geist-OFL.txt")
+    assets.discard("assets/uisfx.js")
+    shutil.copyfile(ROOT / "node_modules/uisfx/dist/index.js", static / "assets/uisfx.js")
+    shutil.copyfile(ROOT / "node_modules/uisfx/LICENSE", static / "assets/uisfx-LICENSE.txt")
     for asset in sorted(assets):
         shutil.copyfile(ROOT / asset, static / asset)
     config = {

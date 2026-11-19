@@ -37,7 +37,7 @@
     />
     <link rel="stylesheet" href="fonts.css" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="app.js" defer></script>
+    <script type="module" src="app.js"></script>
   </head>
   <body>
     <section
@@ -112,6 +112,11 @@
             <span>Upload image</span><span class="coming-soon-badge">coming soon</span>
           </button>
           <a class="menu-button" href="https://github.com/ay0mikun/pluck-app/blob/main/README.md" target="_blank" rel="noopener noreferrer">Documentation</a>
+        </div>
+        <div class="sound-settings" aria-label="Sound preferences">
+          <button id="sound-toggle" class="menu-button" type="button" role="switch" aria-checked="false">Interface sounds <span class="sound-setting-value">Off</span></button>
+          <label class="sound-volume" for="sound-volume"><span>Sound volume</span><input id="sound-volume" type="range" min="0" max="100" value="70" disabled /></label>
+          <button id="typing-sound-toggle" class="menu-button" type="button" role="switch" aria-checked="false" disabled>Typing sounds <span class="sound-setting-value">Off</span></button>
         </div>
         <div class="account-footer">
           <button id="logout" class="menu-button" type="button"><img src="assets/account-logout.svg" width="16" height="16" alt="" />Log out</button>

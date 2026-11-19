@@ -412,6 +412,8 @@ class Handler(BaseHTTPRequestHandler):
             "/": ROOT / "index.html",
             "/index.html": ROOT / "index.html",
             "/app.js": ROOT / "app.js",
+            "/sounds.mjs": ROOT / "sounds.mjs",
+            "/sound-service.mjs": ROOT / "sound-service.mjs",
             "/styles.css": ROOT / "styles.css",
             "/fonts.css": ROOT / "fonts.css",
             "/manifest.webmanifest": ROOT / "manifest.webmanifest",
@@ -419,6 +421,8 @@ class Handler(BaseHTTPRequestHandler):
         file = files.get(path)
         if path.startswith("/assets/") and "/" not in path[8:]:
             file = ROOT / "assets" / path[8:]
+        if path == "/assets/uisfx.js":
+            file = ROOT / "node_modules/uisfx/dist/index.js"
         if re.fullmatch(r"/uploads/[a-f0-9]{32}\.(png|jpg|gif|webp)", path):
             file = UPLOADS / path.split("/")[-1]
         if re.fullmatch(r"/thumbnails/[a-f0-9]{32}\.webp", path):
@@ -469,6 +473,7 @@ class Handler(BaseHTTPRequestHandler):
             ".html": "text/html; charset=utf-8",
             ".css": "text/css",
             ".js": "text/javascript",
+            ".mjs": "text/javascript",
             ".png": "image/png",
             ".svg": "image/svg+xml",
             ".jpg": "image/jpeg",
