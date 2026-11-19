@@ -1627,25 +1627,25 @@ dialog,
   .skeleton-grid > .skeleton:nth-child(n+3) { display: none; }
 }
 
-/* Toast layout follows the reference; colors remain Pluck's existing theme. */
+/* Toast appearance and responsive placement follow the Figma confirmation toast. */
 #toast {
   position: fixed;
-  inset: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) auto auto;
+  inset: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) auto auto;
   margin: 0; padding: 0; border: 0; overflow: visible;
   width: min(361px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
   background: transparent; color: #fefefe; pointer-events: none;
 }
 .toast-card {
   position: absolute; top: 0; right: 0; width: max-content; max-width: 100%;
-  display: flex; align-items: center; gap: 8px; padding: 6px 16px 6px 6px;
-  background: #171717; border: 1px solid #1f1f1f; border-radius: 24px;
-  box-shadow: 0 6px 12px #00000026; font: 400 14px/normal Geist, sans-serif; letter-spacing: -.14px;
+  display: flex; align-items: center; gap: 10px; padding: 8px 20px 8px 8px;
+  background: #1a1a1a; border: 1px solid #282828; border-radius: 52px;
+  box-shadow: 0 6px 6px #00000059; font: 450 16px/normal Geist, sans-serif; letter-spacing: -.24px;
   pointer-events: auto; touch-action: pan-y; transform-origin: top center;
   z-index: calc(4 - var(--toast-index));
   transform: translateY(calc(var(--toast-index) * 8px)) scale(calc(1 - var(--toast-index) * .04));
   transition: transform 180ms ease, opacity 160ms ease;
 }
-.toast-icon { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 24px; background: #212121; }
+.toast-icon { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 30px; background: #242424; }
 .toast-icon img { width: 16px; height: 16px; }
 .toast-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; text-box-trim: trim-both; text-box-edge: cap alphabetic; }
 .toast-close { position: absolute; top: -6px; right: -6px; opacity: 0; border: 1px solid #1f1f1f; border-radius: 50%; background: #171717; color: #b1b0ae; width: 20px; height: 20px; padding: 0; font-size: 16px; }
@@ -1654,6 +1654,7 @@ dialog,
 #toast:is(:hover, :focus-within) .toast-card { transform: translateY(var(--toast-offset)); }
 .toast-card.toast-leaving { opacity: 0; transform: translateY(-12px); pointer-events: none; }
 @starting-style { .toast-card { opacity: 0; transform: translateY(-12px); } }
+@media (max-width: 700px) { #toast { top: max(12px, env(safe-area-inset-top)); } }
 @media (prefers-reduced-motion: reduce) { .toast-card { transition: none; } }
 
 #toast:is(:hover, :focus-within) { pointer-events: auto; }
