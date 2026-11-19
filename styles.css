@@ -967,11 +967,16 @@ dialog:hover > .close {
 .detail-boards { flex-wrap: wrap; }
 .detail-boards:empty { display: none; }
 .detail-boards span {
-  border-radius: 12px;
-  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 34px;
+  padding: 6px 10px;
   background: #1f1f1f;
-  font-size: 14px;
-  overflow-wrap: anywhere;
+  color: #b1b0ae;
+  font: 400 14px/normal Geist, sans-serif;
+  letter-spacing: -.21px;
+  white-space: nowrap;
   max-width: 100%;
 }
 .detail-actions { align-items: flex-start; }
@@ -1332,7 +1337,6 @@ dialog,
 #board-form .primary:hover:not(:disabled) { background: #eaeaea; }
 #board-form .primary:disabled { opacity: 1; background: #b8b8b8; color: #555; }
 
-.detail-boards span { min-height: 34px; }
 .detail-dialog { font-family: Geist, sans-serif; }
 
 .board-drawer {
