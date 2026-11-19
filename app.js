@@ -127,7 +127,8 @@ function toast(message, type = "success") {
   const card = document.createElement("div");
   card.className = "toast-card";
   card.setAttribute("role", type === "error" ? "alert" : "status");
-  const icon = type === "error" ? '<span class="toast-error" aria-hidden="true">!</span>' : '<img src="/assets/toast-success.svg" width="18" height="18" alt="" />';
+  const iconSource = type === "error" ? "/assets/toast-error.svg" : "/assets/toast-success.svg";
+  const icon = `<span class="toast-icon"><img src="${iconSource}" width="16" height="16" alt="" /></span>`;
   card.innerHTML = `${icon}<div class="toast-copy">${escapeHTML(message)}</div><button class="toast-close" type="button" aria-label="Dismiss notification">×</button>`;
   const entry = { remaining: 5000, timer: null, started: 0, dismiss };
   function dismiss() {

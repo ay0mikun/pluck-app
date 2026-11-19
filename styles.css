@@ -1637,20 +1637,21 @@ dialog,
   background: transparent; color: #fefefe; pointer-events: none;
 }
 .toast-card {
-  position: absolute; bottom: 0; right: 0; width: 100%;
-  display: flex; align-items: center; gap: 10px; padding: 14px 12px;
-  background: #131313; border: 1px solid #1e1e1e; border-radius: 12px;
-  box-shadow: 0 0 8px #0004; font: 400 14px/20px Geist, sans-serif;
+  position: absolute; bottom: 0; right: 0; width: max-content; max-width: 100%;
+  display: flex; align-items: center; gap: 8px; padding: 6px 16px 6px 6px;
+  background: #171717; border: 1px solid #1f1f1f; border-radius: 24px;
+  box-shadow: 0 6px 12px #00000026; font: 400 14px/normal Geist, sans-serif; letter-spacing: -.14px;
   pointer-events: auto; touch-action: pan-y; transform-origin: bottom center;
   z-index: calc(4 - var(--toast-index));
   transform: translateY(calc(var(--toast-index) * -8px)) scale(calc(1 - var(--toast-index) * .04));
   transition: transform 180ms ease, opacity 160ms ease;
 }
-.toast-card > img, .toast-error { flex: none; }
-.toast-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.toast-close { flex: none; border: 0; border-radius: 6px; background: transparent; color: #b1b0ae; width: 24px; height: 24px; padding: 0; font-size: 20px; }
+.toast-icon { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 24px; background: #212121; }
+.toast-icon img { width: 16px; height: 16px; }
+.toast-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; text-box-trim: trim-both; text-box-edge: cap alphabetic; }
+.toast-close { position: absolute; top: -6px; right: -6px; opacity: 0; border: 1px solid #1f1f1f; border-radius: 50%; background: #171717; color: #b1b0ae; width: 20px; height: 20px; padding: 0; font-size: 16px; }
+.toast-card:is(:hover, :focus-within) .toast-close { opacity: 1; }
 .toast-close:hover { background: #242424; color: #fefefe; }
-.toast-error { display: grid; place-items: center; border: 1px solid #ff7300; color: #ff7300; width: 18px; height: 18px; border-radius: 50%; font-size: 12px; }
 #toast:is(:hover, :focus-within) .toast-card { transform: translateY(calc(-1 * var(--toast-offset))); }
 .toast-card.toast-leaving { opacity: 0; transform: translateY(12px); pointer-events: none; }
 @starting-style { .toast-card { opacity: 0; transform: translateY(12px); } }
@@ -1661,3 +1662,21 @@ dialog,
 /* The shared image owns exit timing. Do not retain the closed dialog in the
    top layer after its final image transform is released. */
 .detail-dialog { transition: opacity 180ms ease; }
+
+/* Primary action surface from Figma 189:3657. Motion stays unchanged. */
+:is(.primary:not(#confirm-delete), .auth-submit) {
+  gap: 6px;
+  padding: 4px 16px;
+  border-radius: 12px;
+  font: 500 14px/normal Geist, sans-serif;
+  letter-spacing: -.21px;
+}
+:is(.primary:not(#confirm-delete), .auth-submit):not(:disabled):not([data-muted]) {
+  border: 1px solid rgb(195 195 195 / 60%);
+  background: #fefefe;
+  color: #0e0e0e;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 6%), inset 0 1px 6px 1px rgb(0 0 0 / 15%);
+}
+@media (hover: hover) and (pointer: fine) {
+  :is(.primary:not(#confirm-delete), .auth-submit):not(:disabled):not([data-muted]):hover { background: #eaeaea; }
+}
