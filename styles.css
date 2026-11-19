@@ -1706,13 +1706,5 @@ dialog,
   corner-shape: round;
 }
 
-.sound-settings { padding: 6px; border-top: 1px solid #282828; }
-.sound-settings .menu-button { justify-content: space-between; }
-.sound-setting-value { font-size: 12px; color: #888; }
-.sound-settings [aria-checked="true"] .sound-setting-value { color: #fefefe; }
-.sound-volume { display: flex; align-items: center; gap: 12px; padding: 8px 10px; font-size: 12px; }
-.sound-volume input { min-width: 0; width: 100px; margin-left: auto; accent-color: #ff7300; }
-.sound-volume:has(:disabled) { opacity: .4; }
-
 #toast { left: 50%; right: auto; translate: -50% 0; }
 .toast-card { left: 50%; right: auto; translate: -50% 0; }

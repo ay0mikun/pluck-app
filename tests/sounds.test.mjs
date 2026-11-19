@@ -121,16 +121,22 @@ test("all event cues exist in the catalog; processing is the only loop used", ()
   assert.equal(SOUND_EVENTS.deleted, "delete");
   assert.equal(SOUND_EVENTS.copied, "copy");
 });
-test("SSR/module initialization and default preferences never create or play audio", () => {
+test("startup defaults to sounds on at 75%, typing off, with no autoplay", () => {
   const h = harness();
   h.service.event("opened");
-  h.service.unlock();
   assert.deepEqual(h.calls, []);
   assert.deepEqual(h.service.preferences(), {
-    enabled: false,
-    volume: 0.7,
+    enabled: true,
+    volume: 0.75,
     typing: false,
   });
+  h.service.unlock();
+  const creation = h.calls.find(
+    (call) => Array.isArray(call) && call[0] === "create",
+  );
+  assert.equal(creation[1].volume, 0.75);
+  assert.equal(creation[1].enabled, true);
+  assert.deepEqual(h.cues(), []);
 });
 test("suppress pre-unlock async feedback rather than replay it on unlock", async () => {
   const h = harness({ saved: { enabled: true } });

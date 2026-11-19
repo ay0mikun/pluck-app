@@ -28,7 +28,7 @@ export function createSoundService({
   cancel = clearTimeout,
   now = () => performance.now(),
 }) {
-  let preferences = { enabled: false, volume: 0.7, typing: false };
+  let preferences = { enabled: true, volume: 0.75, typing: false };
   try {
     const saved = JSON.parse(storage?.getItem(PREFERENCE_KEY) || "{}");
     if (typeof saved.enabled === "boolean") preferences.enabled = saved.enabled;
