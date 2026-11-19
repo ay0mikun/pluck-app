@@ -993,8 +993,15 @@ dialog:hover > .close {
 .preview-control:not(:disabled):hover { background: #292929; color: #fefefe; }
 .preview-control:disabled { opacity: .4; cursor: default; }
 .preview-icon { flex: 0 0 34px; width: 34px; padding: 0; }
-.detail-navigation { width: min(240px, 100%); gap: 6px; }
-.detail-navigation button { flex: 1; }
+.detail-navigation { width: min(220px, 100%); gap: 0; padding: 4px; background: #1f1f1f; border-radius: 43px; corner-shape: round; }
+.detail-navigation button {
+  flex: 1; min-width: 0; height: 35px; padding: 4px 0;
+  border-radius: 35px; corner-shape: round; background: transparent;
+  color: #fefefe; letter-spacing: -.21px;
+}
+.detail-navigation button:not(:disabled):is(:hover, :focus-visible) { background: #2e2e2e; }
+.detail-navigation button:disabled { opacity: .2; }
+.detail-navigation button img { flex: none; width: 16px; height: 16px; }
 .board-picker { flex: 1; min-width: 0; position: relative; }
 .board-picker summary {
   display: flex;
