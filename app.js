@@ -809,10 +809,10 @@ $("#design-grid").onclick = (event) => {
   const ids = [...$("#design-grid").querySelectorAll("[data-design]")].map(
     (item) => item.dataset.design,
   );
-  openDetail(ids, ids.indexOf(card.dataset.design));
+  openDetail(ids, ids.indexOf(card.dataset.design), "close-preview", card.querySelector(".image-slot").getBoundingClientRect());
 };
 
-function openDetail(ids, index, focusTarget = "close-preview") {
+function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = null) {
   const id = ids[index];
   const design = state.designs.find((item) => item.id === id);
   const dialog = $("#detail-dialog");
@@ -1080,6 +1080,17 @@ function openDetail(ids, index, focusTarget = "close-preview") {
     );
 
   if (!dialog.open) openDialog(dialog);
+  if (sourceBounds && !reducedMotion.matches) {
+    const destination = previewSlot.getBoundingClientRect();
+    if (sourceBounds.width && sourceBounds.height && destination.width && destination.height) {
+      previewSlot.animate([
+        {
+          transform: `translate(${sourceBounds.left - destination.left}px, ${sourceBounds.top - destination.top}px) scale(${sourceBounds.width / destination.width}, ${sourceBounds.height / destination.height})`,
+        },
+        { transform: "none" },
+      ], { duration: 300, easing: "cubic-bezier(.2,.8,.2,1)" });
+    }
+  }
   if (useTouchFocus()) return;
   const focus = document.getElementById(focusTarget);
   (focus.disabled ? $("#close-preview") : focus).focus();

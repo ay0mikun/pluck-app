@@ -1614,3 +1614,12 @@ dialog,
   pointer-events: none;
   transition: background-color 150ms ease;
 }
+
+/* The image itself expands from its grid tile; the preview shell stays still. */
+.detail-image-slot { transform-origin: top left; }
+.detail-dialog,
+.detail-dialog[open],
+.detail-dialog.closing { transform: none; }
+@starting-style {
+  .detail-dialog[open] { transform: none; }
+}
