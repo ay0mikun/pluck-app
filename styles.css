@@ -1697,3 +1697,11 @@ dialog,
     transition-duration: 90ms;
   }
 }
+
+/* Pill surfaces use circular end caps rather than the global superellipse. */
+.detail-boards span,
+.toast-card,
+.toast-icon {
+  border-radius: 9999px;
+  corner-shape: round;
+}
