@@ -90,9 +90,10 @@ function unlocked(options) {
   return h;
 }
 
-test("only the four requested semantic cues are allowed and all are real one-shots", () => {
+test("only the requested semantic cues are allowed and all are real one-shots", () => {
   assert.deepEqual(SOUND_EVENTS, {
     primary: "select",
+    board: "press",
     deleted: "delete",
     copied: "copy",
     imported: "success",
@@ -175,7 +176,7 @@ test("failed, cancelled and timed out operations never play outcome or error sou
     assert.deepEqual(h.cues(), []);
   }
 });
-test("all other sounds remain off, including processing, typing, dialogs, filters and navigation", () => {
+test("all other sounds remain off, including processing, typing, dialogs and image navigation", () => {
   const h = unlocked();
   for (const name of [
     "opened",
@@ -247,4 +248,16 @@ test("final teardown is idempotent and destroys player before caller-owned conte
   assert.equal(h.calls.filter((c) => c === "destroy").length, 1);
   assert.ok(h.calls.indexOf("destroy") < h.calls.indexOf("context.close"));
   assert.equal(h.context.state, "closed");
+});
+
+test("board clicks use a brief press cue and rapid repeats are throttled", () => {
+  const h = unlocked();
+  h.service.event("board", { gesture: true });
+  h.service.event("board", { gesture: true });
+  assert.deepEqual(h.cues(), ["press"]);
+  h.advance(121);
+  h.service.event("board", { gesture: true });
+  assert.deepEqual(h.cues(), ["press", "press"]);
+  h.service.event("hover");
+  assert.deepEqual(h.cues(), ["press", "press"]);
 });

@@ -1,6 +1,7 @@
 export const SOUND_PACK = "soft";
 export const SOUND_EVENTS = Object.freeze({
   primary: "select",
+  board: "press",
   deleted: "delete",
   copied: "copy",
   imported: "success",
@@ -72,7 +73,7 @@ export function createSoundService({
     )
       return null;
     const time = now();
-    const cooldown = name === "primary" ? 120 : 0;
+    const cooldown = name === "primary" || name === "board" ? 120 : 0;
     if (time - (lastPlayed.get(name) ?? -Infinity) < cooldown) return null;
     lastPlayed.set(name, time);
     try {
