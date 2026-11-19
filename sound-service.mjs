@@ -1,7 +1,6 @@
 export const SOUND_PACK = "soft";
 export const SOUND_EVENTS = Object.freeze({
   primary: "select",
-  board: "press",
   deleted: "delete",
   copied: "copy",
   imported: "success",
@@ -31,6 +30,8 @@ export function createSoundService({
     disposed = false,
     disposing;
   const lastPlayed = new Map();
+  const activeSounds = new Set();
+  let clickBuffer;
   const persist = () => {
     try {
       storage?.setItem(PREFERENCE_KEY, JSON.stringify(preferences));
@@ -61,10 +62,95 @@ export function createSoundService({
       ready = false;
     }
   }
+  // A dry 20ms noise tick, matching the reference's non-melodic click character.
+  // It shares the existing unlocked context, volume and teardown lifecycle.
+  function boardClick() {
+    if (!clickBuffer) {
+      clickBuffer = context.createBuffer(
+        1,
+        Math.ceil(context.sampleRate * 0.02),
+        context.sampleRate,
+      );
+      const samples = clickBuffer.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) {
+        const t = i / context.sampleRate;
+        const envelope =
+          Math.min(1, t / 0.001) *
+          Math.exp(-t / 0.004) *
+          (1 - i / samples.length);
+        samples[i] = (Math.random() * 2 - 1) * envelope * 0.14;
+      }
+    }
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    source.buffer = clickBuffer;
+    filter.type = "bandpass";
+    filter.frequency.value = 5400;
+    filter.Q.value = 1.8;
+    gain.gain.value = preferences.volume * 0.4;
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(context.destination);
+    const handle = trackVoice(source, [source, filter, gain]);
+    source.start();
+    return handle;
+  }
+  function trackVoice(source, nodes) {
+    let done = false,
+      resolve;
+    const ended = new Promise((finish) => {
+      resolve = finish;
+    });
+    const handle = {
+      ended,
+      stop() {
+        try {
+          source.stop();
+        } catch {}
+        cleanup();
+      },
+    };
+    function cleanup() {
+      if (done) return;
+      done = true;
+      activeSounds.delete(handle);
+      nodes.forEach((node) => node.disconnect());
+      resolve();
+    }
+    source.onended = cleanup;
+    activeSounds.add(handle);
+    return handle;
+  }
+  // Reference-style bubble motion: a gentle rise in, a quicker fall out.
+  function previewSound(opening) {
+    const source = context.createOscillator();
+    const gain = context.createGain();
+    const start = context.currentTime;
+    const duration = opening ? 0.16 : 0.1;
+    source.type = "sine";
+    source.frequency.setValueAtTime(opening ? 220 : 700, start);
+    source.frequency.exponentialRampToValueAtTime(
+      opening ? 520 : 220,
+      start + (opening ? 0.12 : 0.06),
+    );
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.linearRampToValueAtTime(
+      preferences.volume * (opening ? 0.04 : 0.05),
+      start + (opening ? 0.085 : 0.004),
+    );
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    source.connect(gain);
+    gain.connect(context.destination);
+    const handle = trackVoice(source, [source, gain]);
+    source.start(start);
+    source.stop(start + duration);
+    return handle;
+  }
   function event(name, { gesture = false } = {}) {
     const cue = SOUND_EVENTS[name];
     if (
-      !cue ||
+      (!cue && !["board", "previewOpen", "previewClose"].includes(name)) ||
       disposed ||
       (!ready && !(gesture && context)) ||
       !preferences.enabled ||
@@ -73,16 +159,27 @@ export function createSoundService({
     )
       return null;
     const time = now();
-    const cooldown = name === "primary" || name === "board" ? 120 : 0;
+    const cooldown = [
+      "primary",
+      "board",
+      "previewOpen",
+      "previewClose",
+    ].includes(name)
+      ? 120
+      : 0;
     if (time - (lastPlayed.get(name) ?? -Infinity) < cooldown) return null;
     lastPlayed.set(name, time);
     try {
+      if (name === "board") return boardClick();
+      if (name === "previewOpen" || name === "previewClose")
+        return previewSound(name === "previewOpen");
       return player.play(cue);
     } catch {
       return null;
     }
   }
   function stopAll() {
+    for (const click of [...activeSounds]) click.stop();
     player?.stopAll();
   }
   async function run(name, action) {
@@ -115,6 +212,7 @@ export function createSoundService({
         if (context && context.state !== "closed") await context.close();
       }
       player = context = null;
+      clickBuffer = null;
     })();
     return disposing;
   }

@@ -315,6 +315,7 @@ function openDialog(dialog) {
 }
 function closeDialog(dialog) {
   if (dialog.dataset.busy === "true" || dialog.classList.contains("closing")) return;
+  if (dialog.id === "detail-dialog" && dialog.open) sound.event("previewClose", { gesture: true });
   if (dialog.id === "detail-dialog" && !reducedMotion.matches) {
     const tile = [...document.querySelectorAll("#design-grid [data-design]")]
       .find((card) => card.dataset.design === dialog.dataset.design);
@@ -1218,7 +1219,10 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
       },
     );
 
-  if (!dialog.open) openDialog(dialog);
+  if (!dialog.open) {
+    openDialog(dialog);
+    sound.event("previewOpen", { gesture: true });
+  }
   if (sourceBounds && !reducedMotion.matches) {
     const destination = previewSlot.getBoundingClientRect();
     if (sourceBounds.width && sourceBounds.height && destination.width && destination.height) {

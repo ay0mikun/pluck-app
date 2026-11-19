@@ -14,6 +14,65 @@ function harness({ saved = {}, nullPlayback = false, noAudio = false } = {}) {
     visible = true;
   const context = {
     state: "suspended",
+    sampleRate: 48000,
+    currentTime: 0,
+    destination: {},
+    createBuffer(channels, length, sampleRate) {
+      calls.push(["buffer", length, sampleRate]);
+      return { getChannelData: () => new Float32Array(length) };
+    },
+    createBufferSource() {
+      const source = {
+        connect() {},
+        disconnect() {},
+        start() {
+          calls.push(["tick"]);
+        },
+        stop() {
+          calls.push(["tick.stop"]);
+          source.onended?.();
+        },
+      };
+      return source;
+    },
+    createBiquadFilter() {
+      return { frequency: {}, Q: {}, connect() {}, disconnect() {} };
+    },
+    createGain() {
+      return {
+        gain: {
+          setValueAtTime() {},
+          linearRampToValueAtTime() {},
+          exponentialRampToValueAtTime() {},
+        },
+        connect() {},
+        disconnect() {},
+      };
+    },
+    createOscillator() {
+      const source = {
+        frequency: {
+          setValueAtTime(value) {
+            calls.push(["frequency.start", value]);
+          },
+          exponentialRampToValueAtTime(value) {
+            calls.push(["frequency.end", value]);
+          },
+        },
+        connect() {},
+        disconnect() {},
+        start() {
+          calls.push(["tone"]);
+        },
+        stop(time) {
+          if (time === undefined) {
+            calls.push(["tone.stop"]);
+            source.onended?.();
+          }
+        },
+      };
+      return source;
+    },
     resume() {
       calls.push("resume");
       this.state = "running";
@@ -93,7 +152,6 @@ function unlocked(options) {
 test("only the requested semantic cues are allowed and all are real one-shots", () => {
   assert.deepEqual(SOUND_EVENTS, {
     primary: "select",
-    board: "press",
     deleted: "delete",
     copied: "copy",
     imported: "success",
@@ -250,14 +308,60 @@ test("final teardown is idempotent and destroys player before caller-owned conte
   assert.equal(h.context.state, "closed");
 });
 
-test("board clicks use a brief press cue and rapid repeats are throttled", () => {
+test("board clicks use a short cached tick, not the old tonal press cue", async () => {
   const h = unlocked();
+  const click = h.service.event("board", { gesture: true });
   h.service.event("board", { gesture: true });
-  h.service.event("board", { gesture: true });
-  assert.deepEqual(h.cues(), ["press"]);
+  assert.equal(
+    h.calls.filter((c) => Array.isArray(c) && c[0] === "tick").length,
+    1,
+  );
+  assert.deepEqual(h.cues(), []);
+  assert.deepEqual(
+    h.calls.find((c) => Array.isArray(c) && c[0] === "buffer"),
+    ["buffer", 960, 48000],
+  );
   h.advance(121);
   h.service.event("board", { gesture: true });
-  assert.deepEqual(h.cues(), ["press", "press"]);
+  assert.equal(
+    h.calls.filter((c) => Array.isArray(c) && c[0] === "tick").length,
+    2,
+  );
+  assert.equal(
+    h.calls.filter((c) => Array.isArray(c) && c[0] === "buffer").length,
+    1,
+  );
+  h.service.setEnabled(false);
+  await click.ended;
+  assert.equal(
+    h.calls.filter((c) => Array.isArray(c) && c[0] === "tick.stop").length,
+    2,
+  );
   h.service.event("hover");
-  assert.deepEqual(h.cues(), ["press", "press"]);
+  assert.deepEqual(h.cues(), []);
+});
+
+test("preview open rises and preview close falls, with shared mute and cleanup", async () => {
+  const h = unlocked();
+  const opening = h.service.event("previewOpen", { gesture: true });
+  const closing = h.service.event("previewClose", { gesture: true });
+  assert.deepEqual(
+    h.calls
+      .filter((c) => Array.isArray(c) && c[0] === "frequency.start")
+      .map((c) => c[1]),
+    [220, 700],
+  );
+  assert.deepEqual(
+    h.calls
+      .filter((c) => Array.isArray(c) && c[0] === "frequency.end")
+      .map((c) => c[1]),
+    [520, 220],
+  );
+  assert.deepEqual(h.cues(), []);
+  h.service.setEnabled(false);
+  await Promise.all([opening.ended, closing.ended]);
+  assert.equal(
+    h.calls.filter((c) => Array.isArray(c) && c[0] === "tone.stop").length,
+    2,
+  );
 });
