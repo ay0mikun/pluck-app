@@ -418,16 +418,15 @@ test("board hover uses the cached tick after unlock without swallowing the click
   await h.service.destroy();
 });
 
-test("a recent hover tick suppresses only the same board's mouse click", async () => {
+test("hover ticks deduplicate re-entry without suppressing preview navigation", async () => {
   const h = harness();
   h.service.unlock();
   h.service.event("boardHover", { hoverKey: "web" });
   h.advance(180);
-  assert.equal(h.service.event("board", { gesture: true, hoverKey: "web" }), null);
   assert.equal(h.service.event("boardHover", { hoverKey: "web" }), null);
   assert.ok(h.service.event("board", { gesture: true, hoverKey: "mobile" }));
   h.advance(150);
-  assert.ok(h.service.event("board", { gesture: true })); // keyboard, touch, preview navigation
+  assert.ok(h.service.event("board", { gesture: true })); // preview navigation
   h.advance(300);
   assert.ok(h.service.event("board", { gesture: true, hoverKey: "web" }));
   await h.service.destroy();

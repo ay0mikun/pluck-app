@@ -190,7 +190,7 @@ export function createSoundService({
       return null;
     const time = now();
     if (
-      (name === "board" || name === "boardHover") && hoverKey !== undefined &&
+      name === "boardHover" && hoverKey !== undefined &&
       lastBoardHover?.key === hoverKey && time - lastBoardHover.time < 500
     ) return null;
     const cooldown = name === "primary" || name === "board" || name === "boardHover" || tone ? 120 : 0;

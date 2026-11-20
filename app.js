@@ -681,7 +681,6 @@ $("#filters").onclick = (e) => {
   const button = e.target.closest("[data-board]");
   if (!button) return;
   const boardId = button.dataset.board;
-  if (e.isTrusted) sound.event("board", { gesture: true, hoverKey: e.detail > 0 ? boardId : undefined });
   selectedBoard = boardId || null;
   render();
   if (!useTouchFocus()) {
