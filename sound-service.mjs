@@ -58,6 +58,7 @@ export function createSoundService({
   const lastPlayed = new Map();
   const activeSounds = new Set();
   let clickBuffer;
+  let lastBoardHover;
   const persist = () => {
     try {
       storage?.setItem(PREFERENCE_KEY, JSON.stringify(preferences));
@@ -175,7 +176,7 @@ export function createSoundService({
     source.stop(start + duration);
     return handle;
   }
-  function event(name, { gesture = false } = {}) {
+  function event(name, { gesture = false, hoverKey } = {}) {
     const cue = SOUND_EVENTS[name];
     const tone = Object.hasOwn(GLIDES, name) ? GLIDES[name] : null;
     if (
@@ -188,11 +189,19 @@ export function createSoundService({
     )
       return null;
     const time = now();
+    if (
+      (name === "board" || name === "boardHover") && hoverKey !== undefined &&
+      lastBoardHover?.key === hoverKey && time - lastBoardHover.time < 500
+    ) return null;
     const cooldown = name === "primary" || name === "board" || name === "boardHover" || tone ? 120 : 0;
     if (time - (lastPlayed.get(name) ?? -Infinity) < cooldown) return null;
     lastPlayed.set(name, time);
     try {
-      if (name === "board" || name === "boardHover") return boardClick();
+      if (name === "board" || name === "boardHover") {
+        const playback = boardClick();
+        if (name === "boardHover" && hoverKey !== undefined) lastBoardHover = { key: hoverKey, time };
+        return playback;
+      }
       if (tone) return glideSound(tone);
       return ensurePlayer()?.play(cue) ?? null;
     } catch {

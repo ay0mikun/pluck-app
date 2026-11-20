@@ -63,7 +63,7 @@ document.addEventListener("pointerover", (event) => {
   const board = event.target.closest("#filters [data-board]");
   if (!event.isTrusted || event.pointerType !== "mouse" || !board || board.contains(event.relatedTarget)) return;
   // Hover cannot unlock browser audio; it plays after a trusted activation.
-  sound.event("boardHover");
+  sound.event("boardHover", { hoverKey: board.dataset.board });
 }, options);
 document.addEventListener(
   "visibilitychange",
