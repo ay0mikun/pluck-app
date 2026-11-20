@@ -18,6 +18,30 @@ let currentScreen = null,
   galleryFrame;
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const mediaURL = (path) => state.media_urls?.[path] || path;
+// Keep only the current original in memory; never prefetch the whole library.
+let copyImage;
+function prepareCopy(design) {
+  if (copyImage?.key === design.url) return copyImage.promise;
+  copyImage?.controller.abort();
+  const controller = new AbortController();
+  const entry = { key: design.url, controller };
+  entry.promise = (async () => {
+    let response;
+    const direct = mediaURL(design.url);
+    try {
+      response = await fetch(direct, { signal: controller.signal, priority: "low" });
+      if (!response.ok) throw new Error("Image download failed.");
+    } catch (error) {
+      if (controller.signal.aborted || direct === design.url) throw error;
+      response = await fetch(design.url, { signal: controller.signal });
+      if (!response.ok) throw new Error("Image download failed.");
+    }
+    return response.blob();
+  })();
+  copyImage = entry;
+  entry.promise.catch(() => { if (copyImage === entry) copyImage = null; });
+  return entry.promise;
+}
 const imageObserver = new IntersectionObserver((entries) => {
   for (const { target: image, isIntersecting } of entries) {
     if (!isIntersecting) continue;
@@ -460,6 +484,8 @@ $("#logout").onclick = async () => {
   sound.stopAll();
   try {
     await api("auth/logout", "POST", {});
+    copyImage?.controller.abort();
+    copyImage = null;
     user = null;
     libraryReady = false;
     libraryLoading(true);
@@ -946,6 +972,10 @@ $("#design-grid").onclick = (event) => {
 function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = null) {
   const id = ids[index];
   const design = state.designs.find((item) => item.id === id);
+  if (copyImage && copyImage.key !== design.url) {
+    copyImage.controller.abort();
+    copyImage = null;
+  }
   const dialog = $("#detail-dialog");
   dialog.dataset.design = id;
   dialog.toggleAttribute("data-navigating", dialog.open);
@@ -1010,6 +1040,7 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
     if (previewImage.isConnected) {
       previewImage.src = sharpPreview.src;
       revealPreview();
+      if (!navigator.connection?.saveData) void prepareCopy(design).catch(() => {});
     }
   };
   sharpPreview.onerror = () => {
@@ -1199,10 +1230,7 @@ function openDetail(ids, index, focusTarget = "close-preview", sourceBounds = nu
       if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
         throw new Error("Image clipboard is unavailable.");
       }
-      const png = fetch(design.url).then((response) => {
-        if (!response.ok) throw new Error("Could not download the original image.");
-        return response.blob();
-      });
+      const png = prepareCopy(design);
       await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
       sound.event("copied");
       toast("Image copied.");

@@ -402,3 +402,18 @@ test("slow optional audio can become available after the first gesture", async (
   assert.equal(h.calls.filter((call) => call === "context").length, 1);
   await h.service.destroy();
 });
+
+test("board hover uses the cached tick after unlock without swallowing the click", async () => {
+  const h = harness();
+  assert.equal(h.service.event("boardHover"), null);
+  h.service.unlock();
+  h.service.event("boardHover");
+  h.service.event("boardHover");
+  h.service.event("board", { gesture: true });
+  assert.equal(h.calls.filter(c => Array.isArray(c) && c[0] === "tick").length, 2);
+  assert.equal(h.calls.filter(c => Array.isArray(c) && c[0] === "buffer").length, 1);
+  h.service.setEnabled(false);
+  h.advance(500);
+  assert.equal(h.service.event("boardHover"), null);
+  await h.service.destroy();
+});

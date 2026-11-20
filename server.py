@@ -88,7 +88,7 @@ def imported_designs(con, identifiers, owner):
     for design in designs:
         design["boards"] = memberships.get(design["id"], [])
     return {"designs": designs, "media_urls": object_store.signed_urls([
-        path for design in designs for path in (design["thumbnail_url"], design["creator_avatar_url"], f"/previews/{design['id']}.webp")
+        path for design in designs for path in (design["url"], design["thumbnail_url"], design["creator_avatar_url"], f"/previews/{design['id']}.webp")
     ])}
 
 
@@ -404,7 +404,7 @@ class Handler(BaseHTTPRequestHandler):
                 200, {"boards": boards, "designs": designs, "user": user,
                       "media_urls": object_store.signed_urls([
                           path for design in designs
-                          for path in (design["thumbnail_url"], design["creator_avatar_url"],
+                          for path in (design["url"], design["thumbnail_url"], design["creator_avatar_url"],
                                        f"/previews/{design['id']}.webp")
                       ] + [user.get("avatar_url") if (user.get("avatar_url") or "").startswith("/avatars/") else ""])}
             )

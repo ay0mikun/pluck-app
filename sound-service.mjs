@@ -179,7 +179,7 @@ export function createSoundService({
     const cue = SOUND_EVENTS[name];
     const tone = Object.hasOwn(GLIDES, name) ? GLIDES[name] : null;
     if (
-      (!cue && name !== "board" && !tone) ||
+      (!cue && name !== "board" && name !== "boardHover" && !tone) ||
       disposed ||
       (!ready && !(gesture && context)) ||
       !preferences.enabled ||
@@ -188,11 +188,11 @@ export function createSoundService({
     )
       return null;
     const time = now();
-    const cooldown = name === "primary" || name === "board" || tone ? 120 : 0;
+    const cooldown = name === "primary" || name === "board" || name === "boardHover" || tone ? 120 : 0;
     if (time - (lastPlayed.get(name) ?? -Infinity) < cooldown) return null;
     lastPlayed.set(name, time);
     try {
-      if (name === "board") return boardClick();
+      if (name === "board" || name === "boardHover") return boardClick();
       if (tone) return glideSound(tone);
       return ensurePlayer()?.play(cue) ?? null;
     } catch {

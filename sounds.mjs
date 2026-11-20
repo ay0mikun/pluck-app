@@ -41,7 +41,7 @@ document.addEventListener(
   "click",
   (event) => {
     const button = event.target.closest(
-      "button.primary:not(#confirm-delete), button.auth-submit",
+      "button.primary:not(#confirm-delete), button.auth-submit, #new-board, #previous-design, #next-design",
     );
     if (
       event.isTrusted &&
@@ -51,13 +51,20 @@ document.addEventListener(
       !button.hasAttribute("data-muted")
     ) {
       sound.unlock();
-      sound.event(button.id === "paste-link" ? "pasteLink" : "primary", {
-        gesture: true,
-      });
+      const cue = ["paste-link", "new-board"].includes(button.id)
+        ? "pasteLink"
+        : ["previous-design", "next-design"].includes(button.id) ? "board" : "primary";
+      sound.event(cue, { gesture: true });
     }
   },
   options,
 );
+document.addEventListener("pointerover", (event) => {
+  const board = event.target.closest("#filters [data-board]");
+  if (!event.isTrusted || event.pointerType !== "mouse" || !board || board.contains(event.relatedTarget)) return;
+  // Hover cannot unlock browser audio; it plays after a trusted activation.
+  sound.event("boardHover");
+}, options);
 document.addEventListener(
   "visibilitychange",
   () => {
